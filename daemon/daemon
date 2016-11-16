@@ -1,0 +1,105 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          Text2SIP-Plugin
+# Required-Start:    $remote_fs $syslog $network
+# Required-Stop:     $remote_fs $syslog $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: This file configures the Loxberry Text2SIP-Plugin.
+# Description:       This file configures the Loxberry Text2SIP-Plugin.
+### END INIT INFO
+
+PATH="/sbin:/bin:/usr/sbin:/usr/bin:/opt/loxberry/bin"
+PATH=$PATH.":/opt/loxberry/sbin"
+
+. /lib/lsb/init-functions
+
+### END INIT INFO
+
+# Version 0.1
+# 08.11.2016 22:32:45
+
+logfile="REPLACEBYBASEFOLDER/log/plugins/REPLACEBYSUBFOLDER/Text2SIP.log"
+plugconfigfile="REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP.cfg"
+flagfile="REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/modify.me"
+datafolder="REPLACEBYBASEFOLDER/data/plugins/REPLACEBYSUBFOLDER"
+
+if [ -r $flagfile ]
+then
+  touch $logfile
+  chown loxberry:loxberry $logfile
+  chmod 666 $logfile
+  echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
+  echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
+  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/ "   2>&1 >>$logfile
+  chown loxberry:loxberry REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP*                                      2>&1 >>$logfile
+  chmod 644 REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP*                                                    2>&1 >>$logfile
+  cd $datafolder                                                                                                               2>&1 >>$logfile
+  mkdir wav
+  chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
+  chmod 700 wav                                                                                                                2>&1 >>$logfile
+  
+  cp libopal.so.* /usr/lib/                                                                                                    2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Copy of library libopal successfully completed."                                           2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libopal failed. That is bad!"                                       2>&1 >>$logfile
+  fi
+  cp libpt.so.* /usr/lib/                                                                                                      2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Copy of library libpt successfully completed."                                             2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libpt failed. That is bad!"                                         2>&1 >>$logfile
+  fi
+  cp libspeexdsp.so.* /usr/lib/arm-linux-gnueabihf/                                                                            2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Copy of library libspeexdsp successfully completed."                                       2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libspeexdsp failed. That is bad!"                                   2>&1 >>$logfile
+  fi
+  cp libodbc.so.* /usr/lib/arm-linux-gnueabihf/                                                                                2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Copy of library libodbc successfully completed."                                           2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libodbc failed. That is bad!"                                       2>&1 >>$logfile
+  fi
+  cp libcapi20.so.* /usr/lib/arm-linux-gnueabihf/                                                                              2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Copy of library libcapi20 successfully completed."                                         2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libcapi20 failed. That is bad!"                                     2>&1 >>$logfile
+  fi
+  echo `date +"%b  %e %H:%M:%S "`"Try to install packages"                                                                     2>&1 >>$logfile
+  sudo dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico-data successfully completed."                           2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-data failed. That is bad!"                       2>&1 >>$logfile
+  fi
+  sudo dpkg -i libttspico0_*                                                                                                   2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico0 successfully completed."                               2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico0 failed. That is bad!"                           2>&1 >>$logfile
+  fi
+  sudo dpkg -i libttspico-utils_*                                                                                              2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico-utils successfully completed."                          2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-utils failed. That is bad!"                      2>&1 >>$logfile
+  fi
+  echo `date +"%b  %e %H:%M:%S "`"Installation completed!"                                                                     2>&1 >>$logfile
+else
+  echo `date +"%b  %e %H:%M:%S "`"modify.me not found. Plugin modification already done. Exit."
+  echo `date +"%b  %e %H:%M:%S "`"Plugin modification already done."                                                           2>&1 >>$logfile
+fi
+
+exit 0
