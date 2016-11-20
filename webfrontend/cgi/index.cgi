@@ -89,7 +89,7 @@ our $PLUGIN_USE = "off";
 
 
 # Version of this script
-  $version = "0.2";
+  $version = "0.2.1";
 
 # Figure out in which subfolder we are installed
   $psubfolder = abs_path($0);
@@ -129,6 +129,8 @@ our $PLUGIN_USE = "off";
     $pico2wave        = "/usr/bin/pico2wave";
     $pluginbindir     = $installfolder."/webfrontend/cgi/plugins/".$psubfolder."/bin";
     $plugindatadir    = $installfolder."/data/plugins/".$psubfolder."/wav"  ;
+   	mkdir $plugindatadir unless -d $plugindatadir # Check if dir exists. If not create it.
+
     $pluginlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP.log";
 
     sub get_temp_filename 
