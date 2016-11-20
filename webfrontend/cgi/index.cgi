@@ -129,8 +129,7 @@ our $PLUGIN_USE = "off";
     $pico2wave        = "/usr/bin/pico2wave";
     $pluginbindir     = $installfolder."/webfrontend/cgi/plugins/".$psubfolder."/bin";
     $plugindatadir    = $installfolder."/data/plugins/".$psubfolder."/wav"  ;
-   	mkdir $plugindatadir unless -d $plugindatadir # Check if dir exists. If not create it.
-
+   	mkdir $plugindatadir unless -d $plugindatadir; # Check if dir exists. If not create it.
     $pluginlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP.log";
 
     sub get_temp_filename 
