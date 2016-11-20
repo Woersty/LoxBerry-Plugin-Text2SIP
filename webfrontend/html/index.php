@@ -1,8 +1,8 @@
 <?php
 // LoxBerry Text2SIP-Plugin 
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-// Version 0.2
-// 20.11.2016 00:30:18
+// Version 0.3
+// 20.11.2016 21:08:52
 
 // Configuration parameters
 $psubdir          		=array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
@@ -188,11 +188,11 @@ else if($_REQUEST["mode"] == "make_call")
 		}
 		if ( !$SIPCMD_CALL_RESULT_VI == "" && substr($SIPCMD_CALL_RESULT_VI,0,7) == "http://")
 		{
-	    $check_result = '|while read DTMF_LINE; do DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
+	    $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
 		} 
 		if ( $SIPCMD_CALL_TIMEOUT < 1 )
 		{
-	    $SIPCMD_CALL_TIMEOUT = 1;
+	    $SIPCMD_CALL_TIMEOUT = 60;
 		} 
     $cmd = $sipcmd . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u '.$SIPCMD_CALLING_USER_NUMBER.' -c '.$SIPCMD_CALLING_USER_PASSWORD.' -a "'.$SIPCMD_CALLING_USER_NAME.'" -w '.$SIPCMD_SIP_PROXY.' -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
 		fwrite($pluginjobfile_handle, "$cmd \n");
@@ -200,6 +200,7 @@ else if($_REQUEST["mode"] == "make_call")
     
 		$cmd = 'rm -f '.$tempname_prefix.'* 2>&1 >>'.$pluginlogfile; 
 		fwrite($pluginjobfile_handle, "$cmd \n");
+
 		debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
 		$cmd = "tsp bash $pluginjobfile  2>&1 >>$pluginlogfile \n";
 		debuglog('DBG_ADD_JOB_TO_QUEUE',$cmd );

@@ -62,7 +62,6 @@ our @config_params;
 our $pluginconfigdir;
 our $pluginconfigfile;
 our @language_strings;
-our $wgetbin;
 our $error="";
 our $handle;
 our @Text2SIPconfigfilelines="";
@@ -89,7 +88,7 @@ our $PLUGIN_USE = "off";
 
 
 # Version of this script
-  $version = "0.2.1";
+  $version = "0.3";
 
 # Figure out in which subfolder we are installed
   $psubfolder = abs_path($0);
@@ -261,9 +260,9 @@ our $PLUGIN_USE = "off";
     }
     if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://")
     {
-      $check_result = '|while read DTMF_LINE; do DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
+      $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
     } 
-    if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 1 };
+    if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
     $cmd = $sipcmd . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u '.$SIPCMD_CALLING_USER_NUMBER.' -c '.$SIPCMD_CALLING_USER_PASSWORD.' -a "'.$SIPCMD_CALLING_USER_NAME.'" -w '.$SIPCMD_SIP_PROXY.' -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
     if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
     system ("echo '".$cmd."' >> $pluginjobfile");
