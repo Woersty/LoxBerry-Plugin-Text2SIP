@@ -43,15 +43,32 @@
                                   </tr>
                                   <tr>
                                     <td style='text-align:right; '><nobr><!--$TXT_SIPCMD_CALLING_USER_ROW-->      </nobr></td>
-                                    <td style='width:100py;'><INPUT spellcheck='false' type='text' name='SIPCMD_CALLING_USER_NAME<!--$vg_id-->'       id='SIPCMD_CALLING_USER_NAME<!--$vg_id-->'        value='<!--$SIPCMD_CALLING_USER_NAME-->'      </td>
+                                    <td style='width:100px;'><INPUT spellcheck='false' type='text' name='SIPCMD_CALLING_USER_NAME<!--$vg_id-->'       id='SIPCMD_CALLING_USER_NAME<!--$vg_id-->'        value='<!--$SIPCMD_CALLING_USER_NAME-->'      </td>
                                     <td style='width:50px;' ><INPUT spellcheck='false' type='text' name='SIPCMD_CALLING_USER_NUMBER<!--$vg_id-->'     id='SIPCMD_CALLING_USER_NUMBER<!--$vg_id-->'      value='<!--$SIPCMD_CALLING_USER_NUMBER-->'    </td>
                                     <td style='width:150px;'><INPUT spellcheck='false' type='text' name='SIPCMD_CALLING_USER_PASSWORD<!--$vg_id-->'   id='SIPCMD_CALLING_USER_PASSWORD<!--$vg_id-->'    value='<!--$SIPCMD_CALLING_USER_PASSWORD-->'  </td>
                                     <td style='width:100px;'><INPUT spellcheck='false' type='text' name='SIPCMD_SIP_PROXY<!--$vg_id-->'               id='SIPCMD_SIP_PROXY<!--$vg_id-->'                value='<!--$SIPCMD_SIP_PROXY-->'              </td>
                                   </tr>
-                                  <tr><td style='text-align:right; '><nobr><!--$TXT_SIPCMD_CALLED_USER-->            </nobr></td><td colspan='4' width='100%'><INPUT spellcheck='false' type='text' name='SIPCMD_CALLED_USER<!--$vg_id-->'             id='SIPCMD_CALLED_USER<!--$vg_id-->'              value='<!--$SIPCMD_CALLED_USER-->'            </td></tr>
-                                  <tr><td style='text-align:right; '><nobr><!--$TXT_SIPCMD_CALL_PAUSE_BEFORE_GUIDE--></nobr></td><td colspan='4' width='100%'><INPUT spellcheck='false' type='text' name='SIPCMD_CALL_PAUSE_BEFORE_GUIDE<!--$vg_id-->' id='SIPCMD_CALL_PAUSE_BEFORE_GUIDE<!--$vg_id-->'  value='<!--$SIPCMD_CALL_PAUSE_BEFORE_GUIDE-->'</td></tr>
-                                  <tr><td style='text-align:right; '><nobr><!--$TXT_SIPCMD_CALL_PAUSE_AFTER_GUIDE--> </nobr></td><td colspan='4' width='100%'><INPUT spellcheck='false' type='text' name='SIPCMD_CALL_PAUSE_AFTER_GUIDE<!--$vg_id-->'  id='SIPCMD_CALL_PAUSE_AFTER_GUIDE<!--$vg_id-->'   value='<!--$SIPCMD_CALL_PAUSE_AFTER_GUIDE-->' </td></tr>
-                                  <tr><td style='text-align:right; '><nobr><!--$TXT_SIPCMD_CALL_RESULT_VI-->         </nobr></td><td colspan='4' width='100%'><INPUT spellcheck='false' type='text' name='SIPCMD_CALL_RESULT_VI<!--$vg_id-->'          id='SIPCMD_CALL_RESULT_VI<!--$vg_id-->'           value='<!--$SIPCMD_CALL_RESULT_VI-->'         </td></tr>
+                                  <tr><td style='text-align:right; '><nobr><!--$TXT_SIPCMD_CALLED_USER-->            </nobr></td><td colspan='4' width='100%'><INPUT spellcheck='false' type='text' name='SIPCMD_CALLED_USER<!--$vg_id-->'           id='SIPCMD_CALLED_USER<!--$vg_id-->'              value='<!--$SIPCMD_CALLED_USER-->'            </td></tr>
+                                  <tr>
+                                		<td style='text-align:right; '><nobr><!--$TXT_SIPCMD_TIMES--></nobr>
+                                    <td colspan='4'>
+                                  		<table>
+			                                	<tr>
+			                                    <td style='width:200px;'><nobr> <!--$TXT_SIPCMD_CALL_PAUSE_BEFORE_GUIDE-->       &nbsp;</nobr></td>
+			                                    <td style='width:200px;'><nobr>&nbsp;<!--$TXT_SIPCMD_CALL_PAUSE_AFTER_GUIDE-->   &nbsp;</nobr></td>
+			                                    <td style='width:200px;'><nobr>&nbsp;<!--$TXT_SIPCMD_CALL_TIMEOUT-->                   </nobr></td>
+			                                    <td style='width:100%;'>                                                                      </td>
+																				</tr>
+			                                	<tr>
+			                                    <td><INPUT spellcheck='false' type='text' name='SIPCMD_CALL_PAUSE_BEFORE_GUIDE<!--$vg_id-->' id='SIPCMD_CALL_PAUSE_BEFORE_GUIDE<!--$vg_id-->'  value='<!--$SIPCMD_CALL_PAUSE_BEFORE_GUIDE-->'</td>
+			                                    <td><INPUT spellcheck='false' type='text' name='SIPCMD_CALL_PAUSE_AFTER_GUIDE<!--$vg_id-->'  id='SIPCMD_CALL_PAUSE_AFTER_GUIDE<!--$vg_id-->'   value='<!--$SIPCMD_CALL_PAUSE_AFTER_GUIDE-->' </td>
+			                                    <td><INPUT spellcheck='false' type='text' name='SIPCMD_CALL_TIMEOUT<!--$vg_id-->'            id='SIPCMD_CALL_TIMEOUT<!--$vg_id-->'             value='<!--$SIPCMD_CALL_TIMEOUT-->'           </td>
+			                                    <td></td>
+																				</tr>
+																			</table>
+                                    </td>
+                                  </tr>
+                                  <tr><td style='text-align:right; '><nobr><!--$TXT_SIPCMD_CALL_RESULT_VI-->         </nobr></td><td colspan='4' width='100%'><INPUT spellcheck='false' type='text' name='SIPCMD_CALL_RESULT_VI<!--$vg_id-->'        id='SIPCMD_CALL_RESULT_VI<!--$vg_id-->'           value='<!--$SIPCMD_CALL_RESULT_VI-->'         </td></tr>
                                 </table>
                                 <script>
                                   $('#P2W_lang<!--$vg_id-->').countrySelect({ onlyCountries: ['de', 'us', 'gb', 'es', 'fr', 'it'], preferredCountries: '' });
@@ -60,6 +77,6 @@
                                 </script>
                               </div>
                             </div>
-														<br/>
+                            <br/>
                           </td>
                         </tr>

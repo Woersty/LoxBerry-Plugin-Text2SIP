@@ -81,7 +81,7 @@ our $tmp_hosts;
 our $CONTROL_PORT;
 our $Text2SIP_USE;
 our $req;
-our $DEBUG_USE 	= "off";
+our $DEBUG_USE  = "off";
 our $PLUGIN_USE = "off";
 ##########################################################################
 # Read Settings
@@ -89,7 +89,7 @@ our $PLUGIN_USE = "off";
 
 
 # Version of this script
-  $version = "0.1";
+  $version = "0.2";
 
 # Figure out in which subfolder we are installed
   $psubfolder = abs_path($0);
@@ -131,17 +131,17 @@ our $PLUGIN_USE = "off";
     $plugindatadir    = $installfolder."/data/plugins/".$psubfolder."/wav"  ;
     $pluginlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP.log";
 
-		sub get_temp_filename 
-		{
-		  my ($suffix) = @_;
-    	my $fh = File::Temp->new
-    	(
+    sub get_temp_filename 
+    {
+      my ($suffix) = @_;
+      my $fh = File::Temp->new
+      (
         TEMPLATE => 'Text2SIP_XXXX',
         DIR      => $installfolder."/data/plugins/".$psubfolder."/wav/",
         SUFFIX   => $suffix
-    	);
-   		return $fh->filename;
-		}
+      );
+      return $fh->filename;
+    }
     $pluginjobfile    = get_temp_filename('.job.tsp');
     $pluginwavfile    = get_temp_filename('.wav');
     $plugintmpfile    = get_temp_filename('.tmp.wav');
@@ -199,14 +199,14 @@ our $PLUGIN_USE = "off";
   if ($do eq "makecall")
   {
     print "Content-Type: text/plain\n\n";
-		our $check_result ="";
-    my $guide 													= int($query{'vg'});
+    our $check_result ="";
+    my $guide                           = int($query{'vg'});
     if ( $guide == 0 )
     {
-    	print ( $phraseplugin->param('TXT_JOB_QUEUED_INVALID_VGID') );
-    	print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
-			exit;
-		}
+      print ( $phraseplugin->param('TXT_JOB_QUEUED_INVALID_VGID') );
+      print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
+      exit;
+    }
     our $P2W_lang                       = "".param('P2W_lang'.$guide                      );
     if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
     our $P2W_Text                       = "".param('P2W_Text'.$guide                      );
@@ -218,51 +218,53 @@ our $PLUGIN_USE = "off";
     our $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = "".param('SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$guide);
     our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = "".param('SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$guide );
     our $SIPCMD_CALL_RESULT_VI          = "".param('SIPCMD_CALL_RESULT_VI'.$guide         );
+    our $SIPCMD_CALL_TIMEOUT            = int(param('SIPCMD_CALL_TIMEOUT'.$guide          ));
 
-		if     ($P2W_lang eq "gb" ) { $P2W_lang = "en-GB" }
-		elsif  ($P2W_lang eq "us" ) { $P2W_lang = "en-US" }
-		elsif  ($P2W_lang eq "es" ) { $P2W_lang = "es-ES" }
-		elsif  ($P2W_lang eq "fr" ) { $P2W_lang = "fr-FR" }
-		elsif  ($P2W_lang eq "it" ) { $P2W_lang = "it-IT" }
-		elsif  ($P2W_lang eq "de" ) { $P2W_lang = "de-DE" }
-		else 
-		{ 
-	    `echo "Error: Unknown language $P2W_lang - using german instead " >> $pluginlogfile`;
-			$P2W_lang = "de-DE";
-		}
+    if     ($P2W_lang eq "gb" ) { $P2W_lang = "en-GB" }
+    elsif  ($P2W_lang eq "us" ) { $P2W_lang = "en-US" }
+    elsif  ($P2W_lang eq "es" ) { $P2W_lang = "es-ES" }
+    elsif  ($P2W_lang eq "fr" ) { $P2W_lang = "fr-FR" }
+    elsif  ($P2W_lang eq "it" ) { $P2W_lang = "it-IT" }
+    elsif  ($P2W_lang eq "de" ) { $P2W_lang = "de-DE" }
+    else 
+    { 
+      `echo "Error: Unknown language $P2W_lang - using german instead " >> $pluginlogfile`;
+      $P2W_lang = "de-DE";
+    }
     $cmd = 'echo "################################ Create job to '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;
-		if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
     $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
 
     $cmd = 'echo "'.localtime(time).' ## Generating voice " 2>&1 >>'.$pluginlogfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
     $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
-		if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
     system ("echo '".$cmd."' >> $pluginjobfile");
 
     $cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$pluginlogfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
     $cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
-		if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
     system ("echo '".$cmd."' >> $pluginjobfile");
 
     $cmd = 'echo "'.localtime(time).' ## Calling '.$SIPCMD_CALLED_USER.'" 2>&1 >>'.$pluginlogfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
     
- 		$DEBUG_USE                     	= param('DEBUG_USE'                    );
+    $DEBUG_USE                      = param('DEBUG_USE'                    );
     if ( $DEBUG_USE ne "on" ) { $DEBUG_USE = "off" };
-		our $debug_value  ='2>/dev/null';
-		if ( $DEBUG_USE eq "on" )
-		{
-			$debug_value = '2>&1';
-		}
-		if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://")
-		{
-	    $check_result = '|while read DTMF_LINE; do DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
-		} 
-    $cmd = $sipcmd . ' -P sip -u '.$SIPCMD_CALLING_USER_NUMBER.' -c '.$SIPCMD_CALLING_USER_PASSWORD.' -a "'.$SIPCMD_CALLING_USER_NAME.'" -w '.$SIPCMD_SIP_PROXY.' -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
-		if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
+    our $debug_value  ='2>/dev/null';
+    if ( $DEBUG_USE eq "on" )
+    {
+      $debug_value = '2>&1';
+    }
+    if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://")
+    {
+      $check_result = '|while read DTMF_LINE; do DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
+    } 
+    if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 1 };
+    $cmd = $sipcmd . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u '.$SIPCMD_CALLING_USER_NUMBER.' -c '.$SIPCMD_CALLING_USER_PASSWORD.' -a "'.$SIPCMD_CALLING_USER_NAME.'" -w '.$SIPCMD_SIP_PROXY.' -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
     system ("echo '".$cmd."' >> $pluginjobfile");
 
     $cmd = 'echo "'.localtime(time).' ## Deleting files " 2>&1 >>'.$pluginlogfile;
@@ -270,18 +272,18 @@ our $PLUGIN_USE = "off";
     $cmd = 'rm -f '.$pluginjobfile.' '.$plugintmpfile.' '.$pluginwavfile.' 2>&1 >>'.$pluginlogfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
 
-		system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$pluginlogfile");
-		system ("tsp bash $pluginjobfile  2>&1 >>$pluginlogfile");
-		if ( $? eq "0" )
-		{
-	    print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
-    	print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_failed' ).addClass( 'test2sip_job_ok' ); </script>\n";
-		}
-		else
-		{
-	    print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_FAIL');
-    	print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
-		}
+    system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$pluginlogfile");
+    system ("tsp bash $pluginjobfile  2>&1 >>$pluginlogfile");
+    if ( $? eq "0" )
+    {
+      print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
+      print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_failed' ).addClass( 'test2sip_job_ok' ); </script>\n";
+    }
+    else
+    {
+      print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_FAIL');
+      print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
+    }
     $cmd = 'echo "################################ End job from '.$pluginjobfile.' " 2>&1 >>'.$pluginlogfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
     exit;
@@ -297,102 +299,105 @@ our $PLUGIN_USE = "off";
     our $output;
     if ( param('save_data') eq 1 )
     {
- 			$plugin_cfg = new Config::Simple(syntax=>'ini');
-  		$PLUGIN_USE                     	= param('PLUGIN_USE'                    );
+      $plugin_cfg = new Config::Simple(syntax=>'ini');
+      $PLUGIN_USE                       = param('PLUGIN_USE'                    );
       if ( $PLUGIN_USE ne "on" ) { $PLUGIN_USE = "off" };
-  		$DEBUG_USE                     	= param('DEBUG_USE'                    );
+      $DEBUG_USE                      = param('DEBUG_USE'                    );
       if ( $DEBUG_USE ne "on" ) { $DEBUG_USE = "off" };
-  		our $LAST_ID                        	= 0 + int(param('LAST_ID'));
-	    for (my $i=1; $i <= $LAST_ID; $i++)
-	    {
-				if ( !param('P2W_lang'.$i) )
-				{
-		      $plugin_cfg->delete('default.P2W_lang'.$i                      );
-		      $plugin_cfg->delete('default.P2W_Text'.$i                      );
-		      $plugin_cfg->delete('default.SIPCMD_CALLING_USER_NUMBER'.$i    );
-		      $plugin_cfg->delete('default.SIPCMD_CALLING_USER_PASSWORD'.$i  );
-		      $plugin_cfg->delete('default.SIPCMD_CALLING_USER_NAME'.$i      );
-		      $plugin_cfg->delete('default.SIPCMD_SIP_PROXY'.$i              );
-		      $plugin_cfg->delete('default.SIPCMD_CALLED_USER'.$i            );
-		      $plugin_cfg->delete('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i);
-		      $plugin_cfg->delete('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i );
-		      $plugin_cfg->delete('default.SIPCMD_CALL_RESULT_VI'.$i );
-				}
-				else
-				{	
-		      our $P2W_lang                       = "".param('P2W_lang'.$i                      );
+      our $LAST_ID                          = 0 + int(param('LAST_ID'));
+      for (my $i=1; $i <= $LAST_ID; $i++)
+      {
+        if ( !param('P2W_lang'.$i) )
+        {
+          $plugin_cfg->delete('default.P2W_lang'.$i                      );
+          $plugin_cfg->delete('default.P2W_Text'.$i                      );
+          $plugin_cfg->delete('default.SIPCMD_CALLING_USER_NUMBER'.$i    );
+          $plugin_cfg->delete('default.SIPCMD_CALLING_USER_PASSWORD'.$i  );
+          $plugin_cfg->delete('default.SIPCMD_CALLING_USER_NAME'.$i      );
+          $plugin_cfg->delete('default.SIPCMD_SIP_PROXY'.$i              );
+          $plugin_cfg->delete('default.SIPCMD_CALLED_USER'.$i            );
+          $plugin_cfg->delete('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i);
+          $plugin_cfg->delete('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i );
+          $plugin_cfg->delete('default.SIPCMD_CALL_RESULT_VI'.$i );
+          $plugin_cfg->delete('default.SIPCMD_CALL_TIMEOUT'.$i );
+        }
+        else
+        { 
+          our $P2W_lang                       = "".param('P2W_lang'.$i                      );
           if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
-		      our $P2W_Text                       = "".param('P2W_Text'.$i                      );
-		      if ($P2W_Text eq "" ) 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_P2W_Text'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b><b>#$i</b></b>"; exit;
-		      }
-		      our $SIPCMD_CALLING_USER_NAME       = "".param('SIPCMD_CALLING_USER_NAME'.$i      );
-		      if ($SIPCMD_CALLING_USER_NAME eq "" ) 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_CALLING_USER_NAME')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
-		      }
-		      our $SIPCMD_CALLING_USER_NUMBER     = "".param('SIPCMD_CALLING_USER_NUMBER'.$i    );
-		      if ($SIPCMD_CALLING_USER_NUMBER eq "" ) 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_CALLING_USER_NUMBER')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
-		      }
-		      our $SIPCMD_CALLING_USER_PASSWORD   = "".param('SIPCMD_CALLING_USER_PASSWORD'.$i  );
-		      if ($SIPCMD_CALLING_USER_PASSWORD eq "" ) 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_CALLING_USER_PASSWORD')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
-		      }
-		      our $SIPCMD_SIP_PROXY               = "".param('SIPCMD_SIP_PROXY'.$i              );
-		      if ($SIPCMD_SIP_PROXY eq "" ) 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_SIP_PROXY')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
-		      }
-		      our $SIPCMD_CALLED_USER             = "".param('SIPCMD_CALLED_USER'.$i            );
-		      if ($SIPCMD_CALLED_USER eq "" ) 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_SIPCMD_CALLED_USER'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
-		      }
-		      if (substr($SIPCMD_CALLED_USER,0,2) eq "00" || substr($SIPCMD_CALLED_USER,0,4) eq "0900" || substr($SIPCMD_CALLED_USER,0,4) eq "0190" || substr($SIPCMD_CALLED_USER,0,3) eq "010") 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_NUMBER_BLOCKED')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$SIPCMD_CALLED_USER."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
-		      }
-		      our $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = int(param('SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i));
-		      our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = int(param('SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i ));
-		      our $SIPCMD_CALL_RESULT_VI         	= "".param('SIPCMD_CALL_RESULT_VI'.$i            );
-		      if ($SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) ne "http://") 
-		      {
-		      	print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_RESULT_PARAM_BAD')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_SIPCMD_CALL_RESULT_VI'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
-		      }
-		      $plugin_cfg->param('default.P2W_lang'.$i                      ,"$P2W_lang"                       );
-		      $plugin_cfg->param('default.P2W_Text'.$i                      ,"$P2W_Text"                       );
-		      $plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$i    ,"$SIPCMD_CALLING_USER_NUMBER"     );
-		      $plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$i  ,"$SIPCMD_CALLING_USER_PASSWORD"   );
-		      $plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$i      ,"$SIPCMD_CALLING_USER_NAME"       );
-		      $plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$i              ,"$SIPCMD_SIP_PROXY"               );
-		      $plugin_cfg->param('default.SIPCMD_CALLED_USER'.$i            ,"$SIPCMD_CALLED_USER"             );
-		      $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i,"$SIPCMD_CALL_PAUSE_BEFORE_GUIDE" );
-		      $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i ,"$SIPCMD_CALL_PAUSE_AFTER_GUIDE"  );
-		      $plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$i 				,"$SIPCMD_CALL_RESULT_VI"   			 );
-	      }
-	    }
+          our $P2W_Text                       = "".param('P2W_Text'.$i                      );
+          if ($P2W_Text eq "" ) 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_P2W_Text'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b><b>#$i</b></b>"; exit;
+          }
+          our $SIPCMD_CALLING_USER_NAME       = "".param('SIPCMD_CALLING_USER_NAME'.$i      );
+          if ($SIPCMD_CALLING_USER_NAME eq "" ) 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_CALLING_USER_NAME')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
+          }
+          our $SIPCMD_CALLING_USER_NUMBER     = "".param('SIPCMD_CALLING_USER_NUMBER'.$i    );
+          if ($SIPCMD_CALLING_USER_NUMBER eq "" ) 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_CALLING_USER_NUMBER')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
+          }
+          our $SIPCMD_CALLING_USER_PASSWORD   = "".param('SIPCMD_CALLING_USER_PASSWORD'.$i  );
+          if ($SIPCMD_CALLING_USER_PASSWORD eq "" ) 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_CALLING_USER_PASSWORD')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
+          }
+          our $SIPCMD_SIP_PROXY               = "".param('SIPCMD_SIP_PROXY'.$i              );
+          if ($SIPCMD_SIP_PROXY eq "" ) 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$phraseplugin->param('TXT_SIPCMD_SIP_PROXY')."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
+          }
+          our $SIPCMD_CALLED_USER             = "".param('SIPCMD_CALLED_USER'.$i            );
+          if ($SIPCMD_CALLED_USER eq "" ) 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_SIPCMD_CALLED_USER'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
+          }
+          if (substr($SIPCMD_CALLED_USER,0,2) eq "00" || substr($SIPCMD_CALLED_USER,0,4) eq "0900" || substr($SIPCMD_CALLED_USER,0,4) eq "0190" || substr($SIPCMD_CALLED_USER,0,3) eq "010") 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_NUMBER_BLOCKED')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".$SIPCMD_CALLED_USER."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
+          }
+          our $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = int(param('SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i));
+          our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = int(param('SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i ));
+          our $SIPCMD_CALL_RESULT_VI          = "".param('SIPCMD_CALL_RESULT_VI'.$i            );
+          if ($SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) ne "http://") 
+          {
+            print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_RESULT_PARAM_BAD')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_SIPCMD_CALL_RESULT_VI'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
+          }
+          our $SIPCMD_CALL_TIMEOUT            = int(param('SIPCMD_CALL_TIMEOUT'.$i ));
+          $plugin_cfg->param('default.P2W_lang'.$i                      ,"$P2W_lang"                       );
+          $plugin_cfg->param('default.P2W_Text'.$i                      ,"$P2W_Text"                       );
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$i    ,"$SIPCMD_CALLING_USER_NUMBER"     );
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$i  ,"$SIPCMD_CALLING_USER_PASSWORD"   );
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$i      ,"$SIPCMD_CALLING_USER_NAME"       );
+          $plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$i              ,"$SIPCMD_SIP_PROXY"               );
+          $plugin_cfg->param('default.SIPCMD_CALLED_USER'.$i            ,"$SIPCMD_CALLED_USER"             );
+          $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i,"$SIPCMD_CALL_PAUSE_BEFORE_GUIDE" );
+          $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i ,"$SIPCMD_CALL_PAUSE_AFTER_GUIDE"  );
+          $plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$i         ,"$SIPCMD_CALL_RESULT_VI"          );
+          $plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$i           ,"$SIPCMD_CALL_TIMEOUT"            );
+        }
+      }
       $plugin_cfg->param('default.LAST_ID'    ,$LAST_ID    );
       $plugin_cfg->param('default.PLUGIN_USE' ,"$PLUGIN_USE" );
       $plugin_cfg->param('default.DEBUG_USE' ,"$DEBUG_USE" );
       if ( $plugin_cfg->write($pluginconfigfile) )
       {
-	      print "\n<br/>".$phraseplugin->param('TXT_SAVE_DIALOG_OK');
-	    	print "\n<script> setTimeout( function() { location.reload(true); }, 1500); </script>\n";
-	      exit;
-    	}
-    	else
-    	{
-		    print "\n<br/><span class='test2sip_job_ok'>".$phraseplugin->param('TXT_SAVE_DIALOG_OK')."</span>\n";
-    	}
+        print "\n<br/>".$phraseplugin->param('TXT_SAVE_DIALOG_OK');
+        print "\n<script> setTimeout( function() { location.reload(true); }, 1500); </script>\n";
+        exit;
+      }
+      else
+      {
+        print "\n<br/><span class='test2sip_job_ok'>".$phraseplugin->param('TXT_SAVE_DIALOG_OK')."</span>\n";
+      }
     }
     else
-		{
-	    print "\n<br/><span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n";
-		}    
+    {
+      print "\n<br/><span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n";
+    }    
   }
   else
   {
@@ -457,70 +462,72 @@ our $PLUGIN_USE = "off";
     # Print Template header
     &lbheader;
 
-		our $vg_select 											= "";
-		our $P2W_lang                       = "de";
-		our $vg_id                          = 0;
-		our $LAST_ID    										= 0;
-		our $PLUGIN_USE 										= "off";
-		our $DEBUG_USE 											= "off";
-		our $P2W_Text                       = "";
-		our $SIPCMD_CALLING_USER_NUMBER     = "";
-		our $SIPCMD_CALLING_USER_PASSWORD   = "";
-		our $SIPCMD_CALLING_USER_NAME       = "";
-		our $SIPCMD_SIP_PROXY               = "";
-		our $SIPCMD_CALLED_USER             = "";
-		our $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = "";
-		our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = "";
-		our $SIPCMD_CALL_RESULT_VI 					= "";
-		
+    our $vg_select                      = "";
+    our $P2W_lang                       = "de";
+    our $vg_id                          = 0;
+    our $LAST_ID                        = 0;
+    our $PLUGIN_USE                     = "off";
+    our $DEBUG_USE                      = "off";
+    our $P2W_Text                       = "";
+    our $SIPCMD_CALLING_USER_NUMBER     = "";
+    our $SIPCMD_CALLING_USER_PASSWORD   = "";
+    our $SIPCMD_CALLING_USER_NAME       = "";
+    our $SIPCMD_SIP_PROXY               = "";
+    our $SIPCMD_CALLED_USER             = "";
+    our $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = 100;
+    our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = 5000;
+    our $SIPCMD_CALL_RESULT_VI          = "";
+    our $SIPCMD_CALL_TIMEOUT            = 1;
+
       if ( $plugin_cfg )
       {
         $LAST_ID                          =  $plugin_cfg->param('default.LAST_ID'                     );
         $PLUGIN_USE                       =  $plugin_cfg->param('default.PLUGIN_USE'                  );
-        $DEBUG_USE                       	=  $plugin_cfg->param('default.DEBUG_USE'                   );
+        $DEBUG_USE                        =  $plugin_cfg->param('default.DEBUG_USE'                   );
         for ($vg_id=1; $vg_id <= $LAST_ID; $vg_id++)
         {
-					if ( $plugin_cfg->param('default.P2W_lang'.$vg_id) )
-					{                                                                                                                       
-	          $P2W_lang                           =  "".$plugin_cfg->param('default.P2W_lang'.$vg_id                      );
-						if ( "$P2W_lang" eq "" ) 
-						{
-							 next; 
-						}
-	          if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
-	          $P2W_Text                       =  "".$plugin_cfg->param('default.P2W_Text'.$vg_id                      );
-	          $SIPCMD_CALLING_USER_NUMBER     =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$vg_id    );
-	          $SIPCMD_CALLING_USER_PASSWORD   =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$vg_id  );
-	          $SIPCMD_CALLING_USER_NAME       =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$vg_id      );
-	          $SIPCMD_SIP_PROXY               =  "".$plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$vg_id              );
-	          $SIPCMD_CALLED_USER             =  "".$plugin_cfg->param('default.SIPCMD_CALLED_USER'.$vg_id            );
-	          $SIPCMD_CALL_PAUSE_BEFORE_GUIDE =  "".$plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$vg_id);
-	          $SIPCMD_CALL_PAUSE_AFTER_GUIDE  =  "".$plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$vg_id );
-	          $SIPCMD_CALL_RESULT_VI					=  "".$plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$vg_id );
-	
-	          open(F,"$installfolder/templates/plugins/$psubfolder/$lang/giude_row.html") || die "Missing template /plugins/$psubfolder/$lang/giude_row.html";
-	          while (<F>)
-	          {
-	             $_ =~ s/<!--\$(.*?)-->/${$1}/g;
-	             $vg_select .= $_;
-	          }
-	          close(F);
-        	}
+          if ( $plugin_cfg->param('default.P2W_lang'.$vg_id) )
+          {                                                                                                                       
+            $P2W_lang                           =  "".$plugin_cfg->param('default.P2W_lang'.$vg_id                      );
+            if ( "$P2W_lang" eq "" ) 
+            {
+               next; 
+            }
+            if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
+            $P2W_Text                       =  "".$plugin_cfg->param('default.P2W_Text'.$vg_id                          );
+            $SIPCMD_CALLING_USER_NUMBER     =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$vg_id        );
+            $SIPCMD_CALLING_USER_PASSWORD   =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$vg_id      );
+            $SIPCMD_CALLING_USER_NAME       =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$vg_id          );
+            $SIPCMD_SIP_PROXY               =  "".$plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$vg_id                  );
+            $SIPCMD_CALLED_USER             =  "".$plugin_cfg->param('default.SIPCMD_CALLED_USER'.$vg_id                );
+            $SIPCMD_CALL_PAUSE_BEFORE_GUIDE =  int($plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$vg_id   ));
+            $SIPCMD_CALL_PAUSE_AFTER_GUIDE  =  int($plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$vg_id    ));
+            $SIPCMD_CALL_RESULT_VI          =  "".$plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$vg_id             );
+            $SIPCMD_CALL_TIMEOUT            =  int($plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$vg_id              ));
+      
+            open(F,"$installfolder/templates/plugins/$psubfolder/$lang/giude_row.html") || die "Missing template /plugins/$psubfolder/$lang/giude_row.html";
+            while (<F>)
+            {
+               $_ =~ s/<!--\$(.*?)-->/${$1}/g;
+               $vg_select .= $_;
+            }
+            close(F);
+          }
         }
       }
-			
+      
 
-	    # Parse the strings we want
-	    open(F,"$installfolder/templates/plugins/$psubfolder/$lang/settings.html") || die "Missing template plugins/$psubfolder/$lang/settings.html";
-	    while (<F>)
-	    {
-				if ( $_ ne "" )
-				{
-	      	$_ =~ s/<!--\$(.*?)-->/${$1}/g;
-				}
-	      print $_;
-	    }
-	    close(F);
+      # Parse the strings we want
+      open(F,"$installfolder/templates/plugins/$psubfolder/$lang/settings.html") || die "Missing template plugins/$psubfolder/$lang/settings.html";
+      while (<F>)
+      {
+        if ( $_ ne "" )
+        {
+          $_ =~ s/<!--\$(.*?)-->/${$1}/g;
+        }
+        print $_;
+      }
+      close(F);
 
     # Parse page footer
     &footer;

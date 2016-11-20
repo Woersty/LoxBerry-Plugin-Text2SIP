@@ -1,8 +1,8 @@
 <?php
 // LoxBerry Text2SIP-Plugin 
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-// Version 0.1
-// 15.11.2016 22:12:15
+// Version 0.2
+// 20.11.2016 00:30:18
 
 // Configuration parameters
 $psubdir          		=array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
@@ -150,6 +150,7 @@ else if($_REQUEST["mode"] == "make_call")
     $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = $plugin_cfg_array['SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$guide];
     $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = $plugin_cfg_array['SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$guide ];
     $SIPCMD_CALL_RESULT_VI          = $plugin_cfg_array['SIPCMD_CALL_RESULT_VI'.$guide         ];
+    $SIPCMD_CALL_TIMEOUT			      = $plugin_cfg_array['SIPCMD_CALL_TIMEOUT'.$guide           ];
 
 		if       ($P2W_lang == "gb" ) { $P2W_lang = "en-GB"; }
 		else if  ($P2W_lang == "us" ) { $P2W_lang = "en-US"; }
@@ -180,10 +181,6 @@ else if($_REQUEST["mode"] == "make_call")
 		fwrite($pluginjobfile_handle, "$cmd \n");
 		debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
  		$check_result ="";
-		if ( $SIPCMD_CALL_RESULT_VI != "" && substr($SIPCMD_CALL_RESULT_VI,0,7) == "http://")
-		{
-	    $check_result = '|grep "TestChanAudio::PlaybackAudio: play back done 1"; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'1" ; else wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi;';
-		} 
 		$debug_value  ='2>/dev/null';
 		if ( $DEBUG_USE == "on" )
 		{
@@ -193,7 +190,11 @@ else if($_REQUEST["mode"] == "make_call")
 		{
 	    $check_result = '|while read DTMF_LINE; do DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
 		} 
-    $cmd = $sipcmd . ' -P sip -u '.$SIPCMD_CALLING_USER_NUMBER.' -c '.$SIPCMD_CALLING_USER_PASSWORD.' -a "'.$SIPCMD_CALLING_USER_NAME.'" -w '.$SIPCMD_SIP_PROXY.' -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
+		if ( $SIPCMD_CALL_TIMEOUT < 1 )
+		{
+	    $SIPCMD_CALL_TIMEOUT = 1;
+		} 
+    $cmd = $sipcmd . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u '.$SIPCMD_CALLING_USER_NUMBER.' -c '.$SIPCMD_CALLING_USER_PASSWORD.' -a "'.$SIPCMD_CALLING_USER_NAME.'" -w '.$SIPCMD_SIP_PROXY.' -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
 		fwrite($pluginjobfile_handle, "$cmd \n");
 		debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
     
