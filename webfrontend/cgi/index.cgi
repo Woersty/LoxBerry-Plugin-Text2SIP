@@ -88,7 +88,7 @@ our $PLUGIN_USE = "off";
 
 
 # Version of this script
-  $version = "0.3";
+  $version = "0.4";
 
 # Figure out in which subfolder we are installed
   $psubfolder = abs_path($0);
@@ -143,7 +143,7 @@ our $PLUGIN_USE = "off";
       return $fh->filename;
     }
     $pluginjobfile    = get_temp_filename('.job.tsp');
-    $pluginwavfile    = get_temp_filename('.wav');
+    $pluginwavfile    = get_temp_filename('_wav');
     $plugintmpfile    = get_temp_filename('.tmp.wav');
     
     $sox              = "/usr/bin/sox";

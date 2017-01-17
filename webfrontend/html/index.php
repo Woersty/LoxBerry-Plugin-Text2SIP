@@ -1,8 +1,8 @@
 <?php
 // LoxBerry Text2SIP-Plugin 
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-// Version 0.3
-// 20.11.2016 21:08:52
+// Version 0.4
+// 17.01.2017 21:24:43
 
 // Configuration parameters
 $psubdir          		=array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
@@ -166,7 +166,7 @@ else if($_REQUEST["mode"] == "make_call")
 		$tempname_prefix = tempnam("$plugindatadir/", "Text2SIP_WEB_");
 		$pluginjobfile   = $tempname_prefix.".tsp";
 		$plugintmpfile   = $tempname_prefix.".tmp.wav";
-		$pluginwavfile   = $tempname_prefix.".wav";
+		$pluginwavfile   = $tempname_prefix."_wav";
 		$pluginjobfile_handle = fopen($pluginjobfile, "w");
 		if ( !$pluginjobfile_handle )
 		{
