@@ -1,8 +1,8 @@
 <?php
 // LoxBerry Text2SIP-Plugin 
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-// Version 0.4
-// 17.01.2017 21:24:43
+// Version 0.5
+// 10.02.2017 21:02:49
 
 // Configuration parameters
 $psubdir          		=array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
@@ -128,6 +128,7 @@ else if($_REQUEST["mode"] == "empty_logfile")
 }
 else if($_REQUEST["mode"] == "make_call")
 {
+		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_VG_REQUEST'].$_REQUEST["vg"]."\n", 3, $pluginlogfile);
 		if ( $_REQUEST["vg"] == "" ) 
 		{ 
 			error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['ERROR0001']."\n", 3, $pluginlogfile);
@@ -173,6 +174,18 @@ else if($_REQUEST["mode"] == "make_call")
 			error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['ERROR0004']."\n", 3, $pluginlogfile);
     	die($plugin_phrase_array['ERROR0004']);
 		}
+
+		system ('echo | nc -w 1 "'.$SIPCMD_SIP_PROXY.'" 5060',$code);
+		if ( $code == 0 )
+    {
+			debuglog('DBG_OK_CONNECT_PROXY',"Proxy: $SIPCMD_SIP_PROXY");
+    }
+    else
+    {
+			error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['ERROR0005']." ($SIPCMD_SIP_PROXY)\n", 3, $pluginlogfile);
+    	die($plugin_phrase_array['ERROR0005']." ($SIPCMD_SIP_PROXY)");
+    }
+
 		debuglog('DBG_CREATE_JOB',$pluginjobfile);
     $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
 		fwrite($pluginjobfile_handle, "$cmd \n");
@@ -194,18 +207,17 @@ else if($_REQUEST["mode"] == "make_call")
 		{
 	    $SIPCMD_CALL_TIMEOUT = 60;
 		} 
-    $cmd = $sipcmd . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u '.$SIPCMD_CALLING_USER_NUMBER.' -c '.$SIPCMD_CALLING_USER_PASSWORD.' -a "'.$SIPCMD_CALLING_USER_NAME.'" -w '.$SIPCMD_SIP_PROXY.' -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
+    $cmd = $sipcmd . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
 		fwrite($pluginjobfile_handle, "$cmd \n");
 		debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
-    
+
 		$cmd = 'rm -f '.$tempname_prefix.'* 2>&1 >>'.$pluginlogfile; 
 		fwrite($pluginjobfile_handle, "$cmd \n");
 
 		debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
 		$cmd = "tsp bash $pluginjobfile  2>&1 >>$pluginlogfile \n";
-		debuglog('DBG_ADD_JOB_TO_QUEUE',$cmd );
-		$code = system ($cmd);
-		debuglog('DBG_ADD_JOB_TO_QUEUE_ID',$code );
+		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE']." ->".$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE_ID'], 3, $pluginlogfile);
+		system ("$cmd 2>&1");
 		fclose($pluginjobfile_handle);
 		fclose($pluginlogfile_handle);
     exit;
