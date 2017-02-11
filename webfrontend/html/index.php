@@ -152,18 +152,38 @@ else if($_REQUEST["mode"] == "make_call")
     $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = $plugin_cfg_array['SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$guide ];
     $SIPCMD_CALL_RESULT_VI          = $plugin_cfg_array['SIPCMD_CALL_RESULT_VI'.$guide         ];
     $SIPCMD_CALL_TIMEOUT			      = $plugin_cfg_array['SIPCMD_CALL_TIMEOUT'.$guide           ];
+    $SIPCMD_CONFIRMATION_DIGIT      = $plugin_cfg_array['SIPCMD_CONFIRMATION_DIGIT'.$guide     ];
+    $SIPCMD_MSINFO                  = $plugin_cfg_array['SIPCMD_MSINFO'.$guide                 ];
 
-		if       ($P2W_lang == "gb" ) { $P2W_lang = "en-GB"; }
-		else if  ($P2W_lang == "us" ) { $P2W_lang = "en-US"; }
-		else if  ($P2W_lang == "es" ) { $P2W_lang = "es-ES"; }
-		else if  ($P2W_lang == "fr" ) { $P2W_lang = "fr-FR"; }
-		else if  ($P2W_lang == "it" ) { $P2W_lang = "it-IT"; }
-		else if  ($P2W_lang == "de" ) { $P2W_lang = "de-DE"; }
+    if ( preg_match('/[0-9\*\#]/', $SIPCMD_CONFIRMATION_DIGIT) ) 
+    {
+    	$SIPCMD_CONFIRMATION_DIGIT = $SIPCMD_CONFIRMATION_DIGIT;
+    }
+    else
+    {
+    	$SIPCMD_CONFIRMATION_DIGIT = "-";
+    };
+
+		if       ($P2W_lang == "gb" ) { $P2W_lang = "en-GB"; $unknown = "unknown";    }
+		else if  ($P2W_lang == "us" ) { $P2W_lang = "en-US"; $unknown = "unknown";    }
+		else if  ($P2W_lang == "es" ) { $P2W_lang = "es-ES"; $unknown = "desconocido";}
+		else if  ($P2W_lang == "fr" ) { $P2W_lang = "fr-FR"; $unknown = "inconnu";    }
+		else if  ($P2W_lang == "it" ) { $P2W_lang = "it-IT"; $unknown = "sconosciuto";}
+		else if  ($P2W_lang == "de" ) { $P2W_lang = "de-DE"; $unknown = "unbekannt";  }
 		else 
 		{ 
 			debuglog('DBG_INVALID_LANGUAGE',$P2W_lang);
 			$P2W_lang = "de-DE";
+			$unknown = "unbekannt";
 		}
+
+		if(isset($_REQUEST["info"]))
+		{
+			$state = file_get_contents($_REQUEST["info"]);
+			$P2W_Text = $P2W_Text." ".preg_replace("/[^A-Za-z0-9‰ˆ¸ﬂA÷‹.,-_]/", '', stripos ( stristr('value="',$state,true), '" Code', 20 ));
+		}
+
+
 		$tempname_prefix = tempnam("$plugindatadir/", "Text2SIP_WEB_");
 		$pluginjobfile   = $tempname_prefix.".tsp";
 		$plugintmpfile   = $tempname_prefix.".tmp.wav";
@@ -186,7 +206,32 @@ else if($_REQUEST["mode"] == "make_call")
     	die($plugin_phrase_array['ERROR0005']." ($SIPCMD_SIP_PROXY)");
     }
 
-		debuglog('DBG_CREATE_JOB',$pluginjobfile);
+    if ( preg_match("/[0-9\*\#]/",$SIPCMD_CONFIRMATION_DIGIT) ) 
+    {
+    	$SIPCMD_CONFIRMATION_DIGIT = $SIPCMD_CONFIRMATION_DIGIT;
+    }
+    else
+    {
+    	$SIPCMD_CONFIRMATION_DIGIT = "-";
+    };
+   
+    if ( "$SIPCMD_MSINFO" <> "" )
+   	{
+   		$cmd = '/usr/bin/wget -a "'.$pluginlogfile.'" --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "'.$SIPCMD_MSINFO.'" 2>&1|grep value|cut -d\" -f4';
+   		$msinfo = exec( $cmd, $output , $retval);
+		  if ($retval <> 0 || $msinfo == "") 
+		  {
+  	 		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['ERROR0006']." $SIPCMD_MSINFO \n", 3, $pluginlogfile);
+				$P2W_Text = str_replace("##", $unknown, $P2W_Text);
+		  } 
+		  else 
+		  {
+  	 		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['TXT_SIPCMD_READ_MS_STATE']." $msinfo \n", 3, $pluginlogfile);
+				$P2W_Text = str_replace("##", $msinfo, $P2W_Text);
+		  }
+    }
+    
+    debuglog('DBG_CREATE_JOB',$pluginjobfile);
     $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
 		fwrite($pluginjobfile_handle, "$cmd \n");
 		debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
@@ -199,9 +244,10 @@ else if($_REQUEST["mode"] == "make_call")
 		{
 			$debug_value = '2>&1';
 		}
+
 		if ( !$SIPCMD_CALL_RESULT_VI == "" && substr($SIPCMD_CALL_RESULT_VI,0,7) == "http://")
 		{
-	    $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
+      $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$pluginlogfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$pluginlogfile.'; fi; fi; done ';     
 		} 
 		if ( $SIPCMD_CALL_TIMEOUT < 1 )
 		{
@@ -217,14 +263,15 @@ else if($_REQUEST["mode"] == "make_call")
 		debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
 		$cmd = "tsp bash $pluginjobfile  2>&1 >>$pluginlogfile \n";
 		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE']." ->".$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE_ID'], 3, $pluginlogfile);
-		system ("$cmd 2>&1");
+		exec( $cmd );
 		fclose($pluginjobfile_handle);
 		fclose($pluginlogfile_handle);
+  	echo ":o)";
     exit;
 }
 else
 {
-		$result = "Error, invalid request \n";
+		$result = "?! :o(";
 }
 
 header('Content-Type: text/plain; charset=utf-8');

@@ -82,6 +82,7 @@ our $Text2SIP_USE;
 our $req;
 our $DEBUG_USE  = "off";
 our $PLUGIN_USE = "off";
+our $wgetbin    = "wget";
 ##########################################################################
 # Read Settings
 ##########################################################################
@@ -98,6 +99,8 @@ our $PLUGIN_USE = "off";
   $cfg              = new Config::Simple("$home/config/system/general.cfg");
   $installfolder    = $cfg->param("BASE.INSTALLFOLDER");
   $lang             = $cfg->param("BASE.LANG");
+	$wgetbin          = $cfg->param("BINARIES.WGET");
+
 
 #Set directories + read Plugin config
   $pluginconfigdir  = "$home/config/plugins/$psubfolder";
@@ -219,18 +222,48 @@ our $PLUGIN_USE = "off";
     our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = "".param('SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$guide );
     our $SIPCMD_CALL_RESULT_VI          = "".param('SIPCMD_CALL_RESULT_VI'.$guide         );
     our $SIPCMD_CALL_TIMEOUT            = int(param('SIPCMD_CALL_TIMEOUT'.$guide          ));
+    our $SIPCMD_MSINFO                  = "".param('SIPCMD_MSINFO'.$guide                 );
+    our $SIPCMD_CONFIRMATION_DIGIT      = "".param('SIPCMD_CONFIRMATION_DIGIT'.$guide     );
+    if ($SIPCMD_CONFIRMATION_DIGIT =~ /[0-9\*\#]/ ) 
+    {
+    	$SIPCMD_CONFIRMATION_DIGIT = $SIPCMD_CONFIRMATION_DIGIT;
+    }
+    else
+    {
+    	$SIPCMD_CONFIRMATION_DIGIT = "-";
+    };
 
-    if     ($P2W_lang eq "gb" ) { $P2W_lang = "en-GB" }
-    elsif  ($P2W_lang eq "us" ) { $P2W_lang = "en-US" }
-    elsif  ($P2W_lang eq "es" ) { $P2W_lang = "es-ES" }
-    elsif  ($P2W_lang eq "fr" ) { $P2W_lang = "fr-FR" }
-    elsif  ($P2W_lang eq "it" ) { $P2W_lang = "it-IT" }
-    elsif  ($P2W_lang eq "de" ) { $P2W_lang = "de-DE" }
+ 		my $unknown = "unbekannt";
+    if     ($P2W_lang eq "gb" ) { $P2W_lang = "en-GB"; $unknown = "unknown" }
+    elsif  ($P2W_lang eq "us" ) { $P2W_lang = "en-US"; $unknown = "unknown" }
+    elsif  ($P2W_lang eq "es" ) { $P2W_lang = "es-ES"; $unknown = "desconocido" }
+    elsif  ($P2W_lang eq "fr" ) { $P2W_lang = "fr-FR"; $unknown = "inconnu" }
+    elsif  ($P2W_lang eq "it" ) { $P2W_lang = "it-IT"; $unknown = "sconosciuto" }
+    elsif  ($P2W_lang eq "de" ) { $P2W_lang = "de-DE"; $unknown = "unbekannt" }
     else 
     { 
       `echo "Error: Unknown language $P2W_lang - using german instead " >> $pluginlogfile`;
       $P2W_lang = "de-DE";
     }
+    
+    if ( "$SIPCMD_MSINFO" ne "" )
+   	{
+   		my $msinfo = `$wgetbin -a $pluginlogfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1|grep value|cut -d'"' -f4`;
+		  if ($? ne 0 ) 
+		  {
+		  	my $text = $phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo;
+		    `echo "$text " >> $pluginlogfile`;
+				$P2W_Text = $P2W_Text =~ s/##/${unknown}/r; 
+		  } 
+		  else 
+		  {
+		  	my $text = $phraseplugin->param('TXT_SIPCMD_READ_MS_STATE')." ".$msinfo;
+	      `echo "$text " >>  $pluginlogfile`;
+		    $P2W_Text = $P2W_Text =~ s/##/$msinfo/r; 
+		  }
+    }
+       
+    
     $cmd = 'echo "################################ Create job to '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;
     if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
     $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;
@@ -260,7 +293,7 @@ our $PLUGIN_USE = "off";
     }
     if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://")
     {
-      $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; done ';     
+      $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$pluginlogfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$pluginlogfile.'; fi; fi; done ';     
     } 
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
     $cmd = $sipcmd . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
@@ -320,6 +353,8 @@ our $PLUGIN_USE = "off";
           $plugin_cfg->delete('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i );
           $plugin_cfg->delete('default.SIPCMD_CALL_RESULT_VI'.$i );
           $plugin_cfg->delete('default.SIPCMD_CALL_TIMEOUT'.$i );
+          $plugin_cfg->delete('default.SIPCMD_CONFIRMATION_DIGIT'.$i );
+          $plugin_cfg->delete('default.SIPCMD_SIPCMD_MSINFO'.$i );
         }
         else
         { 
@@ -367,6 +402,16 @@ our $PLUGIN_USE = "off";
             print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_RESULT_PARAM_BAD')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_SIPCMD_CALL_RESULT_VI'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b>#$i</b>"; exit;
           }
           our $SIPCMD_CALL_TIMEOUT            = int(param('SIPCMD_CALL_TIMEOUT'.$i ));
+          our $SIPCMD_MSINFO                  = param('SIPCMD_MSINFO'.$i );
+          our $SIPCMD_CONFIRMATION_DIGIT      = param('SIPCMD_CONFIRMATION_DIGIT'.$i );
+          if ($SIPCMD_CONFIRMATION_DIGIT =~ /[0-9\*\#]/ ) 
+          {
+          	$SIPCMD_CONFIRMATION_DIGIT = $SIPCMD_CONFIRMATION_DIGIT;
+          }
+          else
+          {
+          	$SIPCMD_CONFIRMATION_DIGIT = "-";
+          };
           $plugin_cfg->param('default.P2W_lang'.$i                      ,"$P2W_lang"                       );
           $plugin_cfg->param('default.P2W_Text'.$i                      ,"$P2W_Text"                       );
           $plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$i    ,"$SIPCMD_CALLING_USER_NUMBER"     );
@@ -378,6 +423,8 @@ our $PLUGIN_USE = "off";
           $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i ,"$SIPCMD_CALL_PAUSE_AFTER_GUIDE"  );
           $plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$i         ,"$SIPCMD_CALL_RESULT_VI"          );
           $plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$i           ,"$SIPCMD_CALL_TIMEOUT"            );
+          $plugin_cfg->param('default.SIPCMD_CONFIRMATION_DIGIT'.$i     ,"$SIPCMD_CONFIRMATION_DIGIT"      );
+          $plugin_cfg->param('default.SIPCMD_MSINFO'.$i                 ,"$SIPCMD_MSINFO"                  );
         }
       }
       $plugin_cfg->param('default.LAST_ID'    ,$LAST_ID    );
@@ -478,6 +525,8 @@ our $PLUGIN_USE = "off";
     our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = 5000;
     our $SIPCMD_CALL_RESULT_VI          = "";
     our $SIPCMD_CALL_TIMEOUT            = 1;
+    our $SIPCMD_CONFIRMATION_DIGIT      = "";
+    our $SIPCMD_MSINFO                  = "";
 
       if ( $plugin_cfg )
       {
@@ -504,7 +553,17 @@ our $PLUGIN_USE = "off";
             $SIPCMD_CALL_PAUSE_AFTER_GUIDE  =  int($plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$vg_id    ));
             $SIPCMD_CALL_RESULT_VI          =  "".$plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$vg_id             );
             $SIPCMD_CALL_TIMEOUT            =  int($plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$vg_id              ));
-      
+            $SIPCMD_MSINFO                  =  "".$plugin_cfg->param('default.SIPCMD_MSINFO'.$vg_id                     );
+            $SIPCMD_CONFIRMATION_DIGIT      =  "".$plugin_cfg->param('default.SIPCMD_CONFIRMATION_DIGIT'.$vg_id         );
+            if ($SIPCMD_CONFIRMATION_DIGIT =~ /[0-9\*\#]/ ) 
+            {
+            	$SIPCMD_CONFIRMATION_DIGIT = $SIPCMD_CONFIRMATION_DIGIT;
+            }
+            else
+            {
+            	$SIPCMD_CONFIRMATION_DIGIT = "-";
+            };
+
             open(F,"$installfolder/templates/plugins/$psubfolder/$lang/giude_row.html") || die "Missing template /plugins/$psubfolder/$lang/giude_row.html";
             while (<F>)
             {
