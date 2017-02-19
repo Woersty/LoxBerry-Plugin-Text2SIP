@@ -1,8 +1,8 @@
 <?php
 // LoxBerry Text2SIP-Plugin
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-// Version 0.5debug
-// 17.02.2017 19:06:56
+// Version 0.6
+// 19.02.2017 13:50:49
 
 // Configuration parameters
 $psubdir              =array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
@@ -247,6 +247,16 @@ else if($_REQUEST["mode"] == "make_call")
       $debug_value = '2>&1';
       $option_o = " -o $sipcmdlogfile ";
     }
+ 		else
+    {
+	   	$sclf = @fopen("filename.txt", "r+");
+			if ($sclf !== false) 
+			{
+			    ftruncate($sclf, 0);
+			    fclose($sclf);
+			}
+  	}
+    
     if ( !$SIPCMD_CALL_RESULT_VI == "" && substr($SIPCMD_CALL_RESULT_VI,0,7) == "http://")
     {
       $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$pluginlogfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$pluginlogfile.'; fi; fi; done ';
@@ -255,11 +265,14 @@ else if($_REQUEST["mode"] == "make_call")
     {
       $SIPCMD_CALL_TIMEOUT = 60;
     }
-    $cmd = $sipcmd .  $option_o . ' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
+    $cmd = $sipcmd .  $option_o . ' -m "G.711*" -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
     fwrite($pluginjobfile_handle, "$cmd \n");
     debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
 
     $cmd = 'rm -f '.$tempname_prefix.'* 2>&1 >>'.$pluginlogfile;
+    fwrite($pluginjobfile_handle, "$cmd \n");
+
+    $cmd = 'cat '.$sipcmdlogfile.' >>'.$pluginlogfile;
     fwrite($pluginjobfile_handle, "$cmd \n");
 
     debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
