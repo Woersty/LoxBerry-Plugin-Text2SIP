@@ -290,7 +290,7 @@ our $wgetbin    = "wget";
     if ( $DEBUG_USE ne "on" ) { $DEBUG_USE = "off" };
     our $debug_value  ='2>/dev/null';
     our $sipcmd_debug ='';
-    system ("echo -n '' >> $sipcmdlogfile");
+    system ("echo -n '' > $sipcmdlogfile");
     if ( $DEBUG_USE eq "on" )
     {
     	$sipcmd_debug = "-o $sipcmdlogfile";
