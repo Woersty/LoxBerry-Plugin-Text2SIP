@@ -264,8 +264,9 @@ our $wgetbin    = "wget";
 		    $P2W_Text = $P2W_Text =~ s/##/$msinfo/r; 
 		  }
     }
-       
-    
+		$P2W_Text = $P2W_Text =~ s/\n//r; 
+    `echo "Text: $P2W_Text " >>  $pluginlogfile`;
+        
     $cmd = 'echo "################################ Create job to '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;
     if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
     $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;

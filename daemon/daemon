@@ -31,6 +31,7 @@ then
   chmod 666 $logfile
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
+  apt-get -y install --reinstall man-db
   echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/ "   2>&1 >>$logfile
   chown loxberry:loxberry REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP*                                      2>&1 >>$logfile
   chmod 644 REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP*                                                    2>&1 >>$logfile
