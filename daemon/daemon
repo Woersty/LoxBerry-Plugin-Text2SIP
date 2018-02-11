@@ -9,8 +9,7 @@
 # Description:       This file configures the Loxberry Text2SIP-Plugin.
 ### END INIT INFO
 
-PATH="/sbin:/bin:/usr/sbin:/usr/bin:/opt/loxberry/bin"
-PATH=$PATH.":/opt/loxberry/sbin"
+PATH="/sbin:/bin:/usr/sbin:/usr/bin"
 
 . /lib/lsb/init-functions
 
