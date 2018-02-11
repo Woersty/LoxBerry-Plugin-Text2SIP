@@ -15,8 +15,8 @@ PATH="/sbin:/bin:/usr/sbin:/usr/bin"
 
 ### END INIT INFO
 
-# Version v2018.2.11
-# 11.02.2018 14:40:33
+# Version v2018.2.12
+# 11.02.2018 15:43:48
 
 logfile="REPLACEBYBASEFOLDER/log/plugins/REPLACEBYSUBFOLDER/Text2SIP.log"
 plugconfigfile="REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP.cfg"
@@ -71,6 +71,7 @@ then
 else
   echo `date +"%b  %e %H:%M:%S "`"modify.me not found. Plugin modification already done. Exit."
   echo `date +"%b  %e %H:%M:%S "`"Plugin modification already done."                                                           2>&1 >>$logfile
+  chmod 755 REPLACEBYBASEFOLDER/webfrontend/htmlauth/plugins/REPLACEBYSUBFOLDER/bin/sipcmd                                     2>&1 >>$logfile
 fi
 
 exit 0
