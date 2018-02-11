@@ -44,8 +44,8 @@ echo "<INFO> Replace informations REPLACEBYBASEFOLDER = $ARGV5 in daemon file"
 /bin/sed -i "s#REPLACEBYBASEFOLDER#$ARGV5#" $ARGV5/system/daemons/plugins/$ARGV2
 echo "<INFO> Replace informations REPLACEBYSUBFOLDER = $ARGV3 in daemon file"
 /bin/sed -i "s#REPLACEBYSUBFOLDER#$ARGV3#" $ARGV5/system/daemons/plugins/$ARGV2
-mkdir $ARGV5/system/log/plugins/$ARGV2
-touch $ARGV5/system/log/plugins/$ARGV2/Text2SIP.log
-chown -R loxberry:loxberry $ARGV5/system/log/plugins/$ARGV2
+mkdir $ARGV5/log/plugins/$ARGV2
+touch $ARGV5/log/plugins/$ARGV2/Text2SIP.log
+chown -R loxberry:loxberry $ARGV5/log/plugins/$ARGV2
 # Exit with Status 0
 exit 0
