@@ -1,8 +1,8 @@
 <?php
 // LoxBerry Text2SIP-Plugin
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-// Version 0.6
-// 19.02.2017 13:50:49
+// Version v2018.2.11
+// 11.02.2018 14:52:16
 
 // Configuration parameters
 $psubdir              =array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
@@ -17,7 +17,7 @@ $user                 ="Text2SIP";
 $pass                 ="loxberry";
 $pico2wave            = "/usr/bin/pico2wave";
 $sox                  = "/usr/bin/sox";
-$sipcmd               = $mydir."/../../../../webfrontend/cgi/plugins/$psubdir/bin/sipcmd";
+$sipcmd               = $mydir."/../../../../webfrontend/htmlauth/plugins/$psubdir/bin/sipcmd";
 $option_o             = ""; # Heavy sipcmd Debug 
 
 // Enable logging

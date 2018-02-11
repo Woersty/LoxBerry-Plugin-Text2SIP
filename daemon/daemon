@@ -16,8 +16,8 @@ PATH=$PATH.":/opt/loxberry/sbin"
 
 ### END INIT INFO
 
-# Version 0.1
-# 08.11.2016 22:32:45
+# Version v2018.2.11
+# 11.02.2018 14:40:33
 
 logfile="REPLACEBYBASEFOLDER/log/plugins/REPLACEBYSUBFOLDER/Text2SIP.log"
 plugconfigfile="REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP.cfg"
@@ -39,41 +39,12 @@ then
   mkdir wav
   chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
   chmod 700 wav                                                                                                                2>&1 >>$logfile
-  
-  cp libopal.so.* /usr/lib/                                                                                                    2>&1 >>$logfile
+  cp lib*.so.* /usr/lib/                                                                                                    2>&1 >>$logfile
   if [ $? -eq 0 ]
   then
-    echo `date +"%b  %e %H:%M:%S "`"Copy of library libopal successfully completed."                                           2>&1 >>$logfile
+    echo `date +"%b  %e %H:%M:%S "`"Copy of libraries libopal libpt libspeexdsp libcapi20 and libodbc successfully completed." 2>&1 >>$logfile
   else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libopal failed. That is bad!"                                       2>&1 >>$logfile
-  fi
-  cp libpt.so.* /usr/lib/                                                                                                      2>&1 >>$logfile
-  if [ $? -eq 0 ]
-  then
-    echo `date +"%b  %e %H:%M:%S "`"Copy of library libpt successfully completed."                                             2>&1 >>$logfile
-  else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libpt failed. That is bad!"                                         2>&1 >>$logfile
-  fi
-  cp libspeexdsp.so.* /usr/lib/arm-linux-gnueabihf/                                                                            2>&1 >>$logfile
-  if [ $? -eq 0 ]
-  then
-    echo `date +"%b  %e %H:%M:%S "`"Copy of library libspeexdsp successfully completed."                                       2>&1 >>$logfile
-  else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libspeexdsp failed. That is bad!"                                   2>&1 >>$logfile
-  fi
-  cp libodbc.so.* /usr/lib/arm-linux-gnueabihf/                                                                                2>&1 >>$logfile
-  if [ $? -eq 0 ]
-  then
-    echo `date +"%b  %e %H:%M:%S "`"Copy of library libodbc successfully completed."                                           2>&1 >>$logfile
-  else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libodbc failed. That is bad!"                                       2>&1 >>$logfile
-  fi
-  cp libcapi20.so.* /usr/lib/arm-linux-gnueabihf/                                                                              2>&1 >>$logfile
-  if [ $? -eq 0 ]
-  then
-    echo `date +"%b  %e %H:%M:%S "`"Copy of library libcapi20 successfully completed."                                         2>&1 >>$logfile
-  else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of library libcapi20 failed. That is bad!"                                     2>&1 >>$logfile
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries libopal libpt libspeexdsp libcapi20 or libodbc failed. That is bad!"  2>&1 >>$logfile
   fi
   echo `date +"%b  %e %H:%M:%S "`"Try to install packages"                                                                     2>&1 >>$logfile
   sudo dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile

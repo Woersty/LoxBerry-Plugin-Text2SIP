@@ -39,7 +39,7 @@ ARGV4=$4 # Forth argument is Plugin version
 ARGV5=$5 # Fifth argument is Base folder of LoxBerry
 #echo "<INFO> Base folder is: $ARGV5"
 
-# Replace real subfolder and scriptname in config file and create subfolder.dat in CGI folder
+# Replace real subfolder and scriptname in config file and create subfolder.dat in htmlauth folder
 echo "<INFO> Replace informations REPLACEBYBASEFOLDER = $ARGV5 in daemon file"
 /bin/sed -i "s#REPLACEBYBASEFOLDER#$ARGV5#" $ARGV5/system/daemons/plugins/$ARGV2
 echo "<INFO> Replace informations REPLACEBYSUBFOLDER = $ARGV3 in daemon file"
