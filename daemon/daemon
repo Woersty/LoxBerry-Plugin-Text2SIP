@@ -16,12 +16,13 @@ PATH="/sbin:/bin:/usr/sbin:/usr/bin"
 ### END INIT INFO
 
 # Version v2018.2.12
-# 11.02.2018 15:43:48
+# 11.02.2018 16:31:38
 
-logfile="REPLACEBYBASEFOLDER/log/plugins/REPLACEBYSUBFOLDER/Text2SIP.log"
-plugconfigfile="REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP.cfg"
-flagfile="REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/modify.me"
-datafolder="REPLACEBYBASEFOLDER/data/plugins/REPLACEBYSUBFOLDER"
+plugindir="text2sip"
+logfile="$LBHOMEDIR/log/plugins/$plugindir/Text2SIP.log"
+plugconfigfile="$LBHOMEDIR/config/plugins/$plugindir/Text2SIP.cfg"
+flagfile="$LBHOMEDIR/config/plugins/$plugindir/modify.me"
+datafolder="$LBHOMEDIR/data/plugins/$plugindir"
 
 if [ -r $flagfile ]
 then
@@ -31,9 +32,9 @@ then
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
   apt-get -y install --reinstall man-db
-  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/ "   2>&1 >>$logfile
-  chown loxberry:loxberry REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP*                                      2>&1 >>$logfile
-  chmod 644 REPLACEBYBASEFOLDER/config/plugins/REPLACEBYSUBFOLDER/Text2SIP*                                                    2>&1 >>$logfile
+  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in $LBHOMEDIR/config/plugins/$plugindir/ "   2>&1 >>$logfile
+  chown loxberry:loxberry $LBHOMEDIR/config/plugins/$plugindir/Text2SIP*                                      2>&1 >>$logfile
+  chmod 644 $LBHOMEDIR/config/plugins/$plugindir/Text2SIP*                                                    2>&1 >>$logfile
   cd $datafolder                                                                                                               2>&1 >>$logfile
   mkdir wav
   chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
@@ -67,11 +68,12 @@ then
   else
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-utils failed. That is bad!"                      2>&1 >>$logfile
   fi
-  echo `date +"%b  %e %H:%M:%S "`"Installation completed!"                                                                     2>&1 >>$logfile
+  echo `date +"%b  %e %H:%M:%S "`"Installation completed!"                                                                       2>&1 >>$logfile
+  rm $flagfile																											        2>&1 >>$logfile
 else
   echo `date +"%b  %e %H:%M:%S "`"modify.me not found. Plugin modification already done. Exit."
   echo `date +"%b  %e %H:%M:%S "`"Plugin modification already done."                                                           2>&1 >>$logfile
-  chmod 755 REPLACEBYBASEFOLDER/webfrontend/htmlauth/plugins/REPLACEBYSUBFOLDER/bin/sipcmd                                     2>&1 >>$logfile
+  chmod 755 $LBHOMEDIR/webfrontend/htmlauth/plugins/$plugindir/bin/sipcmd                                     2>&1 >>$logfile
 fi
 
 exit 0

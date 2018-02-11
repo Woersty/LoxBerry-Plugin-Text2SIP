@@ -278,6 +278,7 @@ else if($_REQUEST["mode"] == "make_call")
     debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
     $cmd = "tsp bash $pluginjobfile  2>&1 >>$pluginlogfile \n";
     error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE']." ->".$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE_ID'], 3, $pluginlogfile);
+	exec( "/bin/chmod +x $sipcmd" );
     exec( $cmd );
     fclose($pluginjobfile_handle);
     fclose($pluginlogfile_handle);

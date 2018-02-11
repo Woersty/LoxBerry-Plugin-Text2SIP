@@ -305,6 +305,7 @@ our $wgetbin    = "wget";
     
     $cmd = $sipcmd . ' -m "G.711*" '.$sipcmd_debug.' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
     if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
+	system ("chmod +x $sipcmd >> $pluginjobfile");
     system ("echo '".$cmd."' >> $pluginjobfile");
     
     $cmd = 'echo "'.localtime(time).' ## Deleting files " 2>&1 >>'.$pluginlogfile;

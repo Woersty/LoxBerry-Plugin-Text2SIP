@@ -1,23 +1,32 @@
 #!/bin/sh
 
-ARGV0=$0 # Zero argument is shell command
-ARGV1=$1 # First argument is temp folder during install
-ARGV2=$2 # Second argument is Plugin-Name for scipts etc.
-ARGV3=$3 # Third argument is Plugin installation folder
-ARGV4=$4 # Forth argument is Plugin version
-ARGV5=$5 # Fifth argument is Base folder of LoxBerry
+# To use important variables from command line use the following code:
+COMMAND=$0    # Zero argument is shell command
+PTEMPDIR=$1   # First argument is temp folder during install
+PSHNAME=$2    # Second argument is Plugin-Name for scipts etc.
+PDIR=$3       # Third argument is Plugin installation folder
+PVERSION=$4   # Forth argument is Plugin version
+#LBHOMEDIR=$5 # Comes from /etc/environment now. Fifth argument is
+              # Base folder of LoxBerry
 
-echo "<INFO> Copy back existing config files"
-cp -v -r /tmp/uploads/$ARGV1\_upgrade/config/$ARGV3/* $ARGV5/config/plugins/$ARGV3/ 
+# Combine them with /etc/environment
+PCGI=$LBPCGI/$PDIR
+PHTML=$LBPHTML/$PDIR
+PTEMPL=$LBPTEMPL/$PDIR
+PDATA=$LBPDATA/$PDIR
+PLOG=$LBPLOG/$PDIR # Note! This is stored on a Ramdisk now!
+PCONFIG=$LBPCONFIG/$PDIR
+PSBIN=$LBPSBIN/$PDIR
+PBIN=$LBPBIN/$PDIR
 
-echo "<INFO> Upgrade-Mode and no new installation for KNXd needed = Remove modify.me file"
-rm -f $ARGV5/config/plugins/$ARGV3/modify.me 
+echo "<INFO> Copy back existing config files /tmp/${PDIR}.SAVE/* $PCONFIG/"
+cp -v -r /tmp/${PDIR}.SAVE/* $PCONFIG/
 
-echo "<INFO> Copy back existing log files"
-cp -v -r /tmp/uploads/$ARGV1\_upgrade/log/$ARGV3/* $ARGV5/log/plugins/$ARGV3/ 
+echo "<INFO> Remove temporary folder /tmp/${PDIR}.SAVE"
+rm -rf /tmp/${PDIR}.SAVE
 
-echo "<INFO> Remove temporary folders"
-rm -r /tmp/uploads/$ARGV1\_upgrade
+echo "<INFO> Trigger re-install on next reboot"
+touch $PCONFIG/modify.me
 
 # Exit with Status 0
 exit 0
