@@ -1,10 +1,11 @@
 <?php
 // LoxBerry Text2SIP-Plugin
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-// Version v2018.2.11
-// 11.02.2018 14:52:16
+//14.03.2018 20:45:54
 
 // Configuration parameters
+error_reporting(~E_STRICT & ~E_NOTICE);     // Keine Strict / Notice Fehler reporten 
+ini_set("display_errors", false);        // Fehler nicht direkt via PHP ausgeben
 $psubdir              =array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
 $mydir                =pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME);
 $pluginlogfile        =$mydir."/../../../../log/plugins/$psubdir/Text2SIP.log";
