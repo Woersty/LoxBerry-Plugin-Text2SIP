@@ -309,7 +309,7 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
     
     $cmd = $sipcmd . ' -m "G.711*" '.$sipcmd_debug.' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$lbplogdir."/".$logfile.$check_result;
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir."/".$logfile"); }
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir/$logfile"); }
 	system ("chmod +x $sipcmd >> $pluginjobfile");
     system ("echo '".$cmd."' >> $pluginjobfile");
     
@@ -318,8 +318,8 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     $cmd = 'rm -f '.$pluginjobfile.' '.$plugintmpfile.' '.$pluginwavfile.' 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
 
-    system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$lbplogdir."/".$logfile");
-    system ("tsp bash $pluginjobfile  2>&1 >>$lbplogdir."/".$logfile");
+    system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$lbplogdir/$logfile");
+    system ("tsp bash $pluginjobfile  2>&1 >>$lbplogdir/$logfile");
     if ( $? eq "0" )
     {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
