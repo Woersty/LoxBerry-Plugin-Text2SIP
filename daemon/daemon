@@ -31,7 +31,7 @@ if [ -r $flagfile ]
 then
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
-  bash apt-get -y install --reinstall man-db
+  bash "apt-get -y install --reinstall man-db"  2>&1 >>$logfile
   echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACELBPCONFIGDIR "   2>&1 >>$logfile
   chown loxberry:loxberry REPLACELBPCONFIGDIR/*                                                               2>&1 >>$logfile
   chmod 664 REPLACELBPCONFIGDIR/Text2SIP*                                                                     2>&1 >>$logfile
