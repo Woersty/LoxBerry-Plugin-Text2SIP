@@ -32,6 +32,7 @@ then
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
   cd REPLACELBPDATADIR
+  export DEBIAN_FRONTEND="noninteractive"
   apt-get -y install --reinstall man-db  2>&1 >>$logfile
   echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACELBPCONFIGDIR "   2>&1 >>$logfile
   chown loxberry:loxberry REPLACELBPCONFIGDIR/*                                                               2>&1 >>$logfile
