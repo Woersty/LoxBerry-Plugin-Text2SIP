@@ -331,7 +331,7 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
     }
     
-    $cmd = 'cat '.$sipcmdlogfile.' >>'.$v;
+    $cmd = 'cat '.$sipcmdlogfile.' >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
     
     $cmd = 'echo "################################ End job from '.$pluginjobfile.' " 2>&1 >>'.$lbplogdir."/".$logfile;
