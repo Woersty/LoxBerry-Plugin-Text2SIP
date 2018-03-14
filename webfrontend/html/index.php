@@ -118,7 +118,6 @@ if($_REQUEST["mode"] == "download_logfile")
 }
 else if($_REQUEST["mode"] == "empty_logfile")
 {
-	var_dump($pluginlogfile);
   if (file_exists($pluginlogfile))
   {
         $f = @fopen("$pluginlogfile", "r+");
