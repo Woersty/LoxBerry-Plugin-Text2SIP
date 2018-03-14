@@ -19,26 +19,26 @@ PATH="/sbin:/bin:/usr/sbin:/usr/bin"
 # 11.02.2018 16:31:38
 
 plugindir="text2sip"
-logfile="$LBHOMEDIR/log/plugins/$plugindir/Text2SIP.log"
-plugconfigfile="$LBHOMEDIR/config/plugins/$plugindir/Text2SIP.cfg"
-flagfile="$LBHOMEDIR/config/plugins/$plugindir/modify.me"
-datafolder="$LBHOMEDIR/data/plugins/$plugindir"
+logfile="REPLACELBPLOGDIR/Text2SIP.log"
+plugconfigfile="REPLACELBPCONFIGDIR/Text2SIP.cfg"
+flagfile="REPLACELBPCONFIGDIR/modify.me"
+datafolder="REPLACELBPDATADIR"
+touch $logfile
+chown loxberry:loxberry $logfile
+chmod 666 $logfile
 
 if [ -r $flagfile ]
 then
-  touch $logfile
-  chown loxberry:loxberry $logfile
-  chmod 666 $logfile
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
   apt-get -y install --reinstall man-db
-  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in $LBHOMEDIR/config/plugins/$plugindir/ "   2>&1 >>$logfile
-  chown loxberry:loxberry $LBHOMEDIR/config/plugins/$plugindir/Text2SIP*                                      2>&1 >>$logfile
-  chmod 644 $LBHOMEDIR/config/plugins/$plugindir/Text2SIP*                                                    2>&1 >>$logfile
+  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACELBPCONFIGDIR "   2>&1 >>$logfile
+  chown loxberry:loxberry REPLACELBPCONFIGDIR/*                                                               2>&1 >>$logfile
+  chmod 664 REPLACELBPCONFIGDIR/Text2SIP*                                                                     2>&1 >>$logfile
   cd $datafolder                                                                                                               2>&1 >>$logfile
   mkdir wav
   chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
-  chmod 700 wav                                                                                                                2>&1 >>$logfile
+  chmod 755 wav                                                                                                                2>&1 >>$logfile
   cp lib*.so.* /usr/lib/                                                                                                    2>&1 >>$logfile
   if [ $? -eq 0 ]
   then
@@ -73,7 +73,7 @@ then
 else
   echo `date +"%b  %e %H:%M:%S "`"modify.me not found. Plugin modification already done. Exit."
   echo `date +"%b  %e %H:%M:%S "`"Plugin modification already done."                                                           2>&1 >>$logfile
-  chmod 755 $LBHOMEDIR/webfrontend/htmlauth/plugins/$plugindir/bin/sipcmd                                     2>&1 >>$logfile
+  chmod 755 REPLACELBPHTMLAUTHDIR/bin/sipcmd                                     2>&1 >>$logfile
 fi
 
 exit 0
