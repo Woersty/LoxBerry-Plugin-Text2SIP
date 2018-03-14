@@ -31,7 +31,8 @@ if [ -r $flagfile ]
 then
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
-  bash "apt-get -y install --reinstall man-db"  2>&1 >>$logfile
+  cd REPLACELBPDATADIR
+  apt-get -y install --reinstall man-db"  2>&1 >>$logfile
   echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACELBPCONFIGDIR "   2>&1 >>$logfile
   chown loxberry:loxberry REPLACELBPCONFIGDIR/*                                                               2>&1 >>$logfile
   chmod 664 REPLACELBPCONFIGDIR/Text2SIP*                                                                     2>&1 >>$logfile
@@ -47,14 +48,14 @@ then
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries libopal libpt libspeexdsp libcapi20 or libodbc failed. That is bad!"  2>&1 >>$logfile
   fi
   echo `date +"%b  %e %H:%M:%S "`"Try to install packages"                                                                     2>&1 >>$logfile
-  bash dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile
+  dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile
   if [ $? -eq 0 ]
   then
     echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico-data successfully completed."                           2>&1 >>$logfile
   else
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-data failed. That is bad!"                       2>&1 >>$logfile
   fi
-  bash dpkg -i libttspico0_*                                                                                                   2>&1 >>$logfile
+   dpkg -i libttspico0_*                                                                                                   2>&1 >>$logfile
   if [ $? -eq 0 ]
   then
     echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico0 successfully completed."                               2>&1 >>$logfile
