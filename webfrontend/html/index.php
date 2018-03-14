@@ -6,11 +6,16 @@
 // Configuration parameters
 error_reporting(~E_STRICT & ~E_NOTICE);     // Keine Strict / Notice Fehler reporten 
 ini_set("display_errors", false);        // Fehler nicht direkt via PHP ausgeben
+require_once "loxberry_system.php";
+require_once "loxberry_log.php";
+#$L = LBSystem::readlanguage("language.ini");
+$plugindata = LBSystem::plugindata();
+ini_set("log_errors", 1);
+ini_set("error_log", $lbplogdir."/Text2SIP.log");
 $psubdir              =array_pop(array_filter(explode('/',pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME))));
 $mydir                =pathinfo($_SERVER["SCRIPT_FILENAME"],PATHINFO_DIRNAME);
-$pluginlogfile        =$mydir."/../../../../log/plugins/$psubdir/Text2SIP.log";
-$sipcmdlogfile        =$mydir."/../../../../log/plugins/$psubdir/Text2SIP_sipcmd.log";
-$pluginlogfile_handle = fopen($pluginlogfile, "a");
+$pluginlogfile        =$lbplogdir."/Text2SIP.log";
+$sipcmdlogfile        =$lbplogdir."/Text2SIP.log";
 $plugindatadir        =$mydir."/../../../../data/plugins/$psubdir/wav";
 $plugincfgfile        =$mydir."/../../../../config/plugins/$psubdir/Text2SIP.cfg";
 $pluginlanguagefile   =$mydir."/../../../../templates/plugins/$psubdir/de/language.dat";
@@ -21,9 +26,6 @@ $sox                  = "/usr/bin/sox";
 $sipcmd               = $mydir."/../../../../webfrontend/htmlauth/plugins/$psubdir/bin/sipcmd";
 $option_o             = ""; # Heavy sipcmd Debug 
 
-// Enable logging
-ini_set("error_log", $pluginlogfile);
-ini_set("log_errors", 1);
 
 $plugin_phrase_array  = parse_ini_file("$pluginlanguagefile");
 $plugin_cfg_array     = parse_ini_file("$plugincfgfile");
@@ -31,28 +33,64 @@ $DEBUG_USE            = $plugin_cfg_array['DEBUG_USE'                           
 $PLUGIN_USE           = $plugin_cfg_array['PLUGIN_USE'                           ];
 if ( !$PLUGIN_USE == "on" ) { die( $PLUGIN_USE.$plugin_phrase_array['ERROR0003'] ); }
 
-function debuglog($debugtext,$parameter="")
+$datetime    = new DateTime;
+function debug($message = "", $parameter = "", $loglevel = 7 )
 {
-  global $DEBUG_USE,$pluginlogfile_handle,$plugin_phrase_array;
-  if ( !$DEBUG_USE == "1" ) { return; }
-  if ( isset($plugin_phrase_array[$debugtext]) )
+	global $L,$plugindata, $DEBUG_USE,$plugin_phrase_array;
+  
+  if ( $DEBUG_USE == "1" ) { $loglevel = 7; }
+  
+  if ( isset($plugin_phrase_array[$message]) )
   {
-    fwrite($pluginlogfile_handle, date('Y-m-d H:i:s')." [DBG] ".$plugin_phrase_array[$debugtext]." ".$parameter."\n");
+    $message = $plugin_phrase_array[$message];
   }
-  else
-  {
-    fwrite($pluginlogfile_handle, date('Y-m-d H:i:s')." [DBG] ".$debugtext." ".$parameter."\n");
-  }
-    return;
+  $message = $message . "" . $parameter;
+  
+	if ( $plugindata['PLUGINDB_LOGLEVEL'] >= intval($loglevel)   )
+	{
+		switch ($loglevel)
+		{
+		    case 0:
+		        // OFF
+		        break;
+		    case 1:
+		        error_log( strftime("%A") ." <ALERT> PHP: ".$message );
+		        break;
+		    case 2:
+		        error_log( strftime("%A") ." <CRITICAL> PHP: ".$message );
+		        break;
+		    case 3:
+		        error_log( strftime("%A") ." <ERROR> PHP: ".$message );
+		        break;
+		    case 4:
+		        error_log( strftime("%A") ." <WARNING> PHP: ".$message );
+		        break;
+		    case 5:
+		        error_log( strftime("%A") ." <OK> PHP: ".$message );
+		        break;
+		    case 6:
+		        error_log( strftime("%A") ." <INFO> PHP: ".$message );
+		        break;
+		    case 7:
+		    default:
+		        error_log( strftime("%A") ." PHP: ".$message );
+		        break;
+		}
+		if ( $loglevel < 4 ) 
+		{
+		  #if ( isset($message) && $message != "" ) notify ( LBPPLUGINDIR, $L['MY_NAME'], $message);
+		}
+	}
+	return;
 }
 
 
-function authenticate()
-{
-    header("WWW-Authenticate: Basic realm='LoxBerry - Text2SIP-Plugin'");
-    header("HTTP/1.0 401 Unauthorized");
-    return "\nError, Access denied.\n";
-}
+
+
+
+
+
+
 
 // Defaults for inexistent variables
 if (!isset($_REQUEST["mode"])) {$_REQUEST["mode"] = 'normal';}
@@ -78,51 +116,24 @@ if($_REQUEST["mode"] == "download_logfile")
   }
   exit;
 }
-else if($_REQUEST["mode"] == "show_logfile")
-{
-  if (file_exists($pluginlogfile))
-  {
-    error_log( date('Y-m-d H:i:s ')."[LOG] Show logfile\n", 3, $pluginlogfile);
-    header('Content-Description: File Transfer');
-    header('Content-Type: text/plain');
-    header('Content-Disposition: inline; filename="'.basename($pluginlogfile).'"');
-    header('Expires: 0');
-    header('Cache-Control: must-revalidate');
-    header('Pragma: public');
-    header('Content-Length: ' . filesize($pluginlogfile));
-    readfile($pluginlogfile);
-  }
-  else
-  {
-    error_log( date('Y-m-d H:i:s ')."Error reading logfile!\n", 3, $pluginlogfile);
-    die("Error reading logfile.");
-  }
-  exit;
-}
 else if($_REQUEST["mode"] == "empty_logfile")
 {
+	var_dump($pluginlogfile);
   if (file_exists($pluginlogfile))
   {
-    if( ( isset($_SERVER['PHP_AUTH_USER'] ) && ( $_SERVER['PHP_AUTH_USER'] == "$user" ) ) AND  ( isset($_SERVER['PHP_AUTH_PW'] ) && ( $_SERVER['PHP_AUTH_PW'] == "$pass" )) )
-    {
         $f = @fopen("$pluginlogfile", "r+");
         if ($f !== false)
         {
             ftruncate($f, 0);
             fclose($f);
-            error_log( date('Y-m-d H:i:s ')."[LOG] Logfile content deleted\n", 3, $pluginlogfile);
+            debug( "Logfile content deleted", "", 6);
             $result = "\n<img src='/plugins/$psubdir/Text2SIP_ok.png'>";
         }
         else
         {
-            error_log( date('Y-m-d H:i:s ')."[LOG] Logfile content not deleted due to problems doing it.\n", 3, $pluginlogfile);
+            debug( "Logfile content not deleted due to problems doing it.","", 3);
             $result = "\n<img src='/plugins/$psubdir/Text2SIP_fail.png'>";
         }
-    }
-    else
-    {
-        $result = authenticate();
-    }
   }
   else
   {
@@ -175,7 +186,7 @@ else if($_REQUEST["mode"] == "make_call")
     else if  ($P2W_lang == "de" ) { $P2W_lang = "de-DE"; $unknown = "unbekannt";  }
     else
     {
-      debuglog('DBG_INVALID_LANGUAGE',$P2W_lang);
+      debug('DBG_INVALID_LANGUAGE',$P2W_lang,3);
       $P2W_lang = "de-DE";
       $unknown = "unbekannt";
     }
@@ -201,7 +212,7 @@ else if($_REQUEST["mode"] == "make_call")
     system ('echo | nc -w 1 "'.$SIPCMD_SIP_PROXY.'" 5060',$code);
     if ( $code == 0 )
     {
-      debuglog('DBG_OK_CONNECT_PROXY',"Proxy: $SIPCMD_SIP_PROXY");
+      debug('DBG_OK_CONNECT_PROXY'," Proxy: $SIPCMD_SIP_PROXY",5);
     }
     else
     {
@@ -224,23 +235,23 @@ else if($_REQUEST["mode"] == "make_call")
       $msinfo = exec( $cmd, $output , $retval);
       if ($retval <> 0 || $msinfo == "")
       {
-        error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['ERROR0006']." $SIPCMD_MSINFO \n", 3, $pluginlogfile);
+        debug( $plugin_phrase_array['ERROR0006'], " $SIPCMD_MSINFO ", 4);
         $P2W_Text = str_replace("##", $unknown, $P2W_Text);
       }
       else
       {
-        error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['TXT_SIPCMD_READ_MS_STATE']." $msinfo \n", 3, $pluginlogfile);
+        debug ( $plugin_phrase_array['TXT_SIPCMD_READ_MS_STATE']," $msinfo \n", 6);
         $P2W_Text = str_replace("##", $msinfo, $P2W_Text);
       }
     }
 
-    debuglog('DBG_CREATE_JOB',$pluginjobfile);
+    debug('DBG_CREATE_JOB',$pluginjobfile,6);
     $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
     fwrite($pluginjobfile_handle, "$cmd \n");
-    debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
+    debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
     $cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
     fwrite($pluginjobfile_handle, "$cmd \n");
-    debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
+    debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
     $check_result ="";
     $debug_value  ='2>/dev/null';
     if ( $DEBUG_USE == "1" )
@@ -250,7 +261,7 @@ else if($_REQUEST["mode"] == "make_call")
     }
  		else
     {
-	   	$sclf = @fopen("filename.txt", "r+");
+	   	$sclf = @fopen("$sipcmdlogfile", "r+");
 			if ($sclf !== false) 
 			{
 			    ftruncate($sclf, 0);
@@ -268,7 +279,7 @@ else if($_REQUEST["mode"] == "make_call")
     }
     $cmd = $sipcmd .  $option_o . ' -m "G.711*" -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
     fwrite($pluginjobfile_handle, "$cmd \n");
-    debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
+    debug('DBG_ADD_CMD_TO_JOB',$cmd,6);
 
     $cmd = 'rm -f '.$tempname_prefix.'* 2>&1 >>'.$pluginlogfile;
     fwrite($pluginjobfile_handle, "$cmd \n");
@@ -276,13 +287,15 @@ else if($_REQUEST["mode"] == "make_call")
     $cmd = 'cat '.$sipcmdlogfile.' >>'.$pluginlogfile;
     fwrite($pluginjobfile_handle, "$cmd \n");
 
-    debuglog('DBG_ADD_CMD_TO_JOB',$cmd );
+    $cmd = 'rm -f /tmp/ts-out.* 2>&1 >>'.$pluginlogfile;
+    fwrite($pluginjobfile_handle, "$cmd \n");
+
+    debug('DBG_ADD_CMD_TO_JOB',$cmd,6);
     $cmd = "tsp bash $pluginjobfile  2>&1 >>$pluginlogfile \n";
     error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE']." ->".$plugin_phrase_array['DBG_ADD_JOB_TO_QUEUE_ID'], 3, $pluginlogfile);
 	exec( "/bin/chmod +x $sipcmd" );
     exec( $cmd );
     fclose($pluginjobfile_handle);
-    fclose($pluginlogfile_handle);
     echo ":o)";
     exit;
 }
