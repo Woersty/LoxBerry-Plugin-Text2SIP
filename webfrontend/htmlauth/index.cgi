@@ -19,12 +19,15 @@
 # Modules
 ##########################################################################
 
+use LoxBerry::System;
+use LoxBerry::Web;
+use LoxBerry::Log;
 use CGI::Carp qw(fatalsToBrowser);
 use CGI qw/:standard/;
 use Config::Simple '-strict';
 use File::HomeDir;
 use Data::Dumper;
-use Cwd 'abs_path';
+#use Cwd 'abs_path';
 use HTML::Entities;
 use URI::Escape;
 use MIME::Base64 qw( decode_base64 );
@@ -91,6 +94,9 @@ our $wgetbin    = "wget";
 # Version of this script
   $version = "v2018.2.11";
 
+my $logfile 					= "Text2SIP.log";
+my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/". $logfile, append => 1 );
+
 # Figure out in which subfolder we are installed
   $psubfolder = abs_path($0);
   $psubfolder =~ s/(.*)\/(.*)\/(.*)$/$2/g;
@@ -113,7 +119,6 @@ our $wgetbin    = "wget";
     $value =~ tr/+/ /;
     $value =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
     $query{$namef} = $value;
-    our $pluginlogfile;
     our $sipcmdlogfile;
     our $pluginjobfile;
     our $pluginwavfile;
@@ -133,7 +138,7 @@ our $wgetbin    = "wget";
     $pluginbindir     = $installfolder."/webfrontend/htmlauth/plugins/".$psubfolder."/bin";
     $plugindatadir    = $installfolder."/data/plugins/".$psubfolder."/wav"  ;
    	mkdir $plugindatadir unless -d $plugindatadir; # Check if dir exists. If not create it.
-    $pluginlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP.log";
+    #$pluginlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP.log";
     $sipcmdlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP_sipcmd.log";
 
     sub get_temp_filename 
@@ -244,47 +249,47 @@ our $wgetbin    = "wget";
     elsif  ($P2W_lang eq "de" ) { $P2W_lang = "de-DE"; $unknown = "unbekannt" }
     else 
     { 
-      `echo "Error: Unknown language $P2W_lang - using german instead " >> $pluginlogfile`;
+      LOGERR "Error: Unknown language $P2W_lang - using german instead ";
       $P2W_lang = "de-DE";
     }
     
     if ( "$SIPCMD_MSINFO" ne "" )
    	{
-   		my $msinfo = `$wgetbin -a $pluginlogfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1|grep value|cut -d'"' -f4`;
+   		my $msinfo = `$wgetbin -a  $lbplogdir."/".$logfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1|grep value|cut -d'"' -f4`;
 		  if ($? ne 0 ) 
 		  {
 		  	my $text = $phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo;
-		    `echo "$text " >> $pluginlogfile`;
+		    `echo "$text " >> $lbplogdir."/".$logfile`;
 				$P2W_Text = $P2W_Text =~ s/##/${unknown}/r; 
 		  } 
 		  else 
 		  {
 		  	my $text = $phraseplugin->param('TXT_SIPCMD_READ_MS_STATE')." ".$msinfo;
-	      `echo "$text " >>  $pluginlogfile`;
+	      `echo "$text " >>  $lbplogdir."/".$logfile`;
 		    $P2W_Text = $P2W_Text =~ s/##/$msinfo/r; 
 		  }
     }
 		$P2W_Text = $P2W_Text =~ s/\n//r; 
-    `echo "Text: $P2W_Text " >>  $pluginlogfile`;
+    `echo "Text: $P2W_Text " >>  $lbplogdir."/".$logfile`;
         
-    $cmd = 'echo "################################ Create job to '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
-    $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$pluginlogfile;
+    $cmd = 'echo "################################ Create job to '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir."/".$logfile"); }
+    $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
 
-    $cmd = 'echo "'.localtime(time).' ## Generating voice " 2>&1 >>'.$pluginlogfile;
+    $cmd = 'echo "'.localtime(time).' ## Generating voice " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
-    $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
-    system ("echo '".$cmd."' >> $pluginjobfile");
-
-    $cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$pluginlogfile;
-    system ("echo '".$cmd."' >> $pluginjobfile");
-    $cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
+    $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
     system ("echo '".$cmd."' >> $pluginjobfile");
 
-    $cmd = 'echo "'.localtime(time).' ## Calling '.$SIPCMD_CALLED_USER.'" 2>&1 >>'.$pluginlogfile;
+    $cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
+    system ("echo '".$cmd."' >> $pluginjobfile");
+    $cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
+    system ("echo '".$cmd."' >> $pluginjobfile");
+
+    $cmd = 'echo "'.localtime(time).' ## Calling '.$SIPCMD_CALLED_USER.'" 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
     
     $DEBUG_USE                      = param('DEBUG_USE'                    );
@@ -299,22 +304,22 @@ our $wgetbin    = "wget";
     }
     if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://")
     {
-      $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$pluginlogfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$pluginlogfile.'; fi; fi; done ';     
+      $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$lbplogdir."/".$logfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$lbplogdir."/".$logfile.'; fi; fi; done ';     
     } 
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
     
-    $cmd = $sipcmd . ' -m "G.711*" '.$sipcmd_debug.' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$pluginlogfile.$check_result;
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $pluginlogfile"); }
+    $cmd = $sipcmd . ' -m "G.711*" '.$sipcmd_debug.' -T '.$SIPCMD_CALL_TIMEOUT.' -P sip -u "'.$SIPCMD_CALLING_USER_NUMBER.'" -c "'.$SIPCMD_CALLING_USER_PASSWORD.'" -a "'.$SIPCMD_CALLING_USER_NAME.'" -w "'.$SIPCMD_SIP_PROXY.'" -x "c'.$SIPCMD_CALLED_USER.';w'.$SIPCMD_CALL_PAUSE_BEFORE_GUIDE.';v'.$pluginwavfile.';w'.$SIPCMD_CALL_PAUSE_AFTER_GUIDE.';h" '.$debug_value.' |tee -a '.$lbplogdir."/".$logfile.$check_result;
+    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir."/".$logfile"); }
 	system ("chmod +x $sipcmd >> $pluginjobfile");
     system ("echo '".$cmd."' >> $pluginjobfile");
     
-    $cmd = 'echo "'.localtime(time).' ## Deleting files " 2>&1 >>'.$pluginlogfile;
+    $cmd = 'echo "'.localtime(time).' ## Deleting files " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
-    $cmd = 'rm -f '.$pluginjobfile.' '.$plugintmpfile.' '.$pluginwavfile.' 2>&1 >>'.$pluginlogfile;
+    $cmd = 'rm -f '.$pluginjobfile.' '.$plugintmpfile.' '.$pluginwavfile.' 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
 
-    system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$pluginlogfile");
-    system ("tsp bash $pluginjobfile  2>&1 >>$pluginlogfile");
+    system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$lbplogdir."/".$logfile");
+    system ("tsp bash $pluginjobfile  2>&1 >>$lbplogdir."/".$logfile");
     if ( $? eq "0" )
     {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
@@ -326,10 +331,10 @@ our $wgetbin    = "wget";
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
     }
     
-    $cmd = 'cat '.$sipcmdlogfile.' >>'.$pluginlogfile;
+    $cmd = 'cat '.$sipcmdlogfile.' >>'.$v;
     system ("echo '".$cmd."' >> $pluginjobfile");
     
-    $cmd = 'echo "################################ End job from '.$pluginjobfile.' " 2>&1 >>'.$pluginlogfile;
+    $cmd = 'echo "################################ End job from '.$pluginjobfile.' " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
     exit;
   }
