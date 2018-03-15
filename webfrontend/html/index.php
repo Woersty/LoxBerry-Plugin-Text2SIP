@@ -208,17 +208,6 @@ else if($_REQUEST["mode"] == "make_call")
       die($plugin_phrase_array['ERROR0004']);
     }
 
-#    system ('echo | nc -w 1 "'.$SIPCMD_SIP_PROXY.'" 5060',$code);
-#    if ( $code == 0 )
-#    {
-#      debug('DBG_OK_CONNECT_PROXY'," Proxy: $SIPCMD_SIP_PROXY",5);
-#    }
-#    else
-#    {
-#      error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['ERROR0005']." ($SIPCMD_SIP_PROXY)\n", 3, $pluginlogfile);
-#      die($plugin_phrase_array['ERROR0005']." ($SIPCMD_SIP_PROXY)");
-#    }
-#
     if ( preg_match("/[0-9\*\#]/",$SIPCMD_CONFIRMATION_DIGIT) )
     {
       $SIPCMD_CONFIRMATION_DIGIT = $SIPCMD_CONFIRMATION_DIGIT;
