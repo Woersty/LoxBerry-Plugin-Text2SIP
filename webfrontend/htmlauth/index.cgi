@@ -92,7 +92,7 @@ our $wgetbin    = "wget";
 
 
 # Version of this script
-  $version = "v2018.2.11";
+  $version = "v2019.02.12";
 
 my $logfile 					= "Text2SIP.log";
 my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/". $logfile, append => 1 );
@@ -105,7 +105,7 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
   $cfg              = new Config::Simple("$home/config/system/general.cfg");
   $installfolder    = $cfg->param("BASE.INSTALLFOLDER");
   $lang             = $cfg->param("BASE.LANG");
-	$wgetbin          = $cfg->param("BINARIES.WGET");
+  $wgetbin          = $cfg->param("BINARIES.WGET");
 
 
 #Set directories + read Plugin config
@@ -138,9 +138,9 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     $pluginbindir     = $installfolder."/webfrontend/htmlauth/plugins/".$psubfolder."/bin";
     $plugindatadir    = $installfolder."/data/plugins/".$psubfolder."/wav"  ;
    	mkdir $plugindatadir unless -d $plugindatadir; # Check if dir exists. If not create it.
-    #$pluginlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP.log";
     $sipcmdlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP_sipcmd.log";
-
+    mkdir "$installfolder/log/plugins/$psubfolder" unless -d "$installfolder/log/plugins/$psubfolder"; # Check if dir exists. If not create it.
+    system ("echo -n '' > $sipcmdlogfile");
     sub get_temp_filename 
     {
       my ($suffix) = @_;
@@ -296,7 +296,6 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     if ( $DEBUG_USE ne "on" ) { $DEBUG_USE = "off" };
     our $debug_value  ='2>/dev/null';
     our $sipcmd_debug ='';
-    system ("echo -n '' > $sipcmdlogfile");
     if ( $DEBUG_USE eq "on" )
     {
     	$sipcmd_debug = "-o $sipcmdlogfile";

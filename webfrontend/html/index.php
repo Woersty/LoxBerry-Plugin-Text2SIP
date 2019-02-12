@@ -1,7 +1,7 @@
 <?php
 // LoxBerry Text2SIP-Plugin
 // Christian Woerstenfeld - git@loxberry.woerstenfeld.de
-//14.03.2018 20:45:54
+// 12.02.2019 19:04:57
 
 // Configuration parameters
 error_reporting(~E_STRICT & ~E_NOTICE);     // Keine Strict / Notice Fehler reporten 
@@ -32,6 +32,16 @@ $plugin_cfg_array     = parse_ini_file("$plugincfgfile");
 $DEBUG_USE            = $plugin_cfg_array['DEBUG_USE'                            ];
 $PLUGIN_USE           = $plugin_cfg_array['PLUGIN_USE'                           ];
 if ( !$PLUGIN_USE == "on" ) { die( $PLUGIN_USE.$plugin_phrase_array['ERROR0003'] ); }
+
+if (!is_dir($lbplogdir)) 
+{
+	if (!mkdir($lbplogdir)) 
+	{
+		die($plugin_phrase_array['ERROR0007']);
+	}
+}
+if (!touch($pluginlogfile)) die($plugin_phrase_array['ERROR0008']);
+if (!touch($sipcmdlogfile)) die($plugin_phrase_array['ERROR0008']);
 
 $datetime    = new DateTime;
 function debug($message = "", $parameter = "", $loglevel = 7 )
