@@ -181,7 +181,7 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
   $lang         =~ tr/a-z//cd;
   $lang         = substr($lang,0,2);
   # If there's no language phrases file for choosed language, use german as default
-  if (!-e "$installfolder/templates/plugin/$lang/language.dat")
+  if (!-e "$installfolder/templates/plugins/$psubfolder/$lang/language.dat")
   {
     $lang = "en";
   }
