@@ -227,13 +227,31 @@ else if($_REQUEST["mode"] == "make_call")
       $SIPCMD_CONFIRMATION_DIGIT = "-";
     };
 
-    if ( "$SIPCMD_MSINFO" <> "" )
+    if ( "$SIPCMD_MSINFO" <> "" || "$SIPCMD_MSINFO" == "tts" )
     {
-      $cmd = '/usr/bin/wget -a "'.$pluginlogfile.'" --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "'.$SIPCMD_MSINFO.'" 2>&1|grep value|cut -d\" -f4';
-      $msinfo = exec( $cmd, $output , $retval);
+	  if ( "$SIPCMD_MSINFO" == "tts" )
+	  {
+		debug('DBG_TTS_OPTION_USED',"", 7);
+		$msinfo = "";
+		$retval = 1;
+	  }
+	  else
+	  {
+		$cmd = '/usr/bin/wget -a "'.$pluginlogfile.'" --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "'.$SIPCMD_MSINFO.'" 2>&1|grep value|cut -d\" -f4';
+		debug('DBG_ADD_CMD_TO_JOB',$cmd,4);
+		$msinfo = exec( $cmd, $output , $retval);
+	  }
       if ($retval <> 0 || $msinfo == "")
       {
-        debug( $plugin_phrase_array['ERROR0006'], " $SIPCMD_MSINFO ", 4);
+        if (isset($_REQUEST["tts"])) { $unknown = $_REQUEST["tts"]; }
+		if ( "$SIPCMD_MSINFO" == "tts" )
+		{
+			debug( 'DBG_TTS_OPTION_USED',$_REQUEST["tts"], 7);
+		}
+		else
+		{
+			debug( $plugin_phrase_array['ERROR0006'], " $SIPCMD_MSINFO ", 4);
+		}
         $P2W_Text = str_replace("##", $unknown, $P2W_Text);
       }
       else

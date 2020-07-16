@@ -180,7 +180,7 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
 # Clean up lang variable
   $lang         =~ tr/a-z//cd;
   $lang         = substr($lang,0,2);
-  # If there's no language phrases file for choosed language, use german as default
+  # If there's no language phrases file for choosed language, use english as default
   if (!-e "$installfolder/templates/plugins/$psubfolder/$lang/language.dat")
   {
     $lang = "en";
@@ -260,16 +260,16 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
 		  {
 		  	my $text = $phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo;
 		    `echo "$text " >> $lbplogdir."/".$logfile`;
-				$P2W_Text = $P2W_Text =~ s/##/${unknown}/r; 
+				$P2W_Text = $P2W_Text =~ s/##/${unknown}/gr; 
 		  } 
 		  else 
 		  {
 		  	my $text = $phraseplugin->param('TXT_SIPCMD_READ_MS_STATE')." ".$msinfo;
 	      `echo "$text " >>  $lbplogdir."/".$logfile`;
-		    $P2W_Text = $P2W_Text =~ s/##/$msinfo/r; 
+		    $P2W_Text = $P2W_Text =~ s/##/$msinfo/gr; 
 		  }
     }
-		$P2W_Text = $P2W_Text =~ s/\n//r; 
+		$P2W_Text = $P2W_Text =~ s/\n//gr; 
     `echo "Text: $P2W_Text " >>  $lbplogdir."/".$logfile`;
         
     $cmd = 'echo "################################ Create job to '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
