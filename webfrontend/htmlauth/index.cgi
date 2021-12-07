@@ -85,6 +85,12 @@ our $Text2SIP_USE;
 our $req;
 our $DEBUG_USE  = "off";
 our $PLUGIN_USE = "off";
+#*********************** Added by OL *************************************
+our $T2S_INSTALLED;
+our $T2S_USE = "off";
+our $ttsfile;
+#*************************************************************************
+our $res;
 our $wgetbin    = "wget";
 ##########################################################################
 # Read Settings
@@ -95,7 +101,7 @@ our $wgetbin    = "wget";
   $version = "v2019.02.12";
 
 my $logfile 					= "Text2SIP.log";
-my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/". $logfile, append => 1 );
+our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/". $logfile, append => 1 );
 
 # Figure out in which subfolder we are installed
   $psubfolder = abs_path($0);
@@ -276,16 +282,38 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir."/".$logfile"); }
     $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
-
-    $cmd = 'echo "'.localtime(time).' ## Generating voice " 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$cmd."' >> $pluginjobfile");
-    $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$lbplogdir."/".$logfile;
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
-    system ("echo '".$cmd."' >> $pluginjobfile");
-
-    $cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$cmd."' >> $pluginjobfile");
-    $cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+	
+	#**************************** Added by OL ***************************************
+	# Get saved value from config
+	$T2S_USE = param('T2S_USE');
+	if ( $T2S_USE eq "on" ) {
+		my $lame = "/usr/bin/lame";
+		$cmd = 'echo "'.localtime(time).' ## Generating voice from T2S Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		&t2svoice;
+		$cmd = 'echo "'.localtime(time).' ## Generated voice from T2S Plugin has been received" 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		$cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		$cmd = $lame.' --decode '.$ttsfile.' '.$plugintmpfile;
+		system ($cmd);
+		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+	} else {
+		$cmd = 'echo "'.localtime(time).' ## Generating voice " 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+		if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		$cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+	}
+	#print Dumper $cmd;
+	
+	#************************* End of added by OL ***********************************
+	#********************************************************************************
+	
+    
     if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
     system ("echo '".$cmd."' >> $pluginjobfile");
 
@@ -351,6 +379,10 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
       $plugin_cfg = new Config::Simple(syntax=>'ini');
       $PLUGIN_USE                       = param('PLUGIN_USE'                    );
       if ( $PLUGIN_USE ne "on" ) { $PLUGIN_USE = "off" };
+	  #**************************** Added by OL ***************************************
+	  $T2S_USE                       = param('T2S_USE'                    );
+      if ( $T2S_USE ne "on" ) { $T2S_USE = "off" };
+	  #********************************************************************************
       $DEBUG_USE                      = param('DEBUG_USE'                    );
       if ( $DEBUG_USE ne "on" ) { $DEBUG_USE = "off" };
       our $LAST_ID                          = 0 + int(param('LAST_ID'));
@@ -443,8 +475,14 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
           $plugin_cfg->param('default.SIPCMD_MSINFO'.$i                 ,"$SIPCMD_MSINFO"                  );
         }
       }
-      $plugin_cfg->param('default.LAST_ID'    ,$LAST_ID    );
+	  
+	  $plugin_cfg->param('default.LAST_ID'    ,$LAST_ID    );
       $plugin_cfg->param('default.PLUGIN_USE' ,"$PLUGIN_USE" );
+	  
+	  #**************************** Added by OL ***************************************
+	  $plugin_cfg->param('default.T2S_USE' ,"$T2S_USE" );
+	  #********************************************************************************
+	  
       $plugin_cfg->param('default.DEBUG_USE' ,"$DEBUG_USE" );
       if ( $plugin_cfg->write($pluginconfigfile) )
       {
@@ -530,6 +568,10 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     our $vg_id                          = 0;
     our $LAST_ID                        = 0;
     our $PLUGIN_USE                     = "off";
+	#********************** Added by OL ***********************************
+	our $T2S_USE                     	= "off";
+	#**********************************************************************
+	our $T2S_INSTALLED                 	= "false";
     our $DEBUG_USE                      = "off";
     our $P2W_Text                       = "";
     our $SIPCMD_CALLING_USER_NUMBER     = "";
@@ -543,11 +585,14 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     our $SIPCMD_CALL_TIMEOUT            = 1;
     our $SIPCMD_CONFIRMATION_DIGIT      = "";
     our $SIPCMD_MSINFO                  = "";
-
+	
       if ( $plugin_cfg )
       {
         $LAST_ID                          =  $plugin_cfg->param('default.LAST_ID'                     );
         $PLUGIN_USE                       =  $plugin_cfg->param('default.PLUGIN_USE'                  );
+		#********************** Added by OL ***********************************
+		$T2S_USE                       	  =  $plugin_cfg->param('default.T2S_USE'                  );
+		#**********************************************************************
         $DEBUG_USE                        =  $plugin_cfg->param('default.DEBUG_USE'                   );
         for ($vg_id=1; $vg_id <= $LAST_ID; $vg_id++)
         {
@@ -590,8 +635,20 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
           }
         }
       }
-      
-
+	  
+	  #**************************************** Added by OL ************************************
+	  # Check if Text-2-speech Plugin is installed
+	  $T2S_INSTALLED = "false";
+	  
+	  my @plugins = LoxBerry::System::get_plugins();
+	  foreach my $plugin (@plugins) {
+		if ($plugin->{PLUGINDB_TITLE} eq "Text-2-Speech") {
+			$T2S_INSTALLED = "true";
+			next;
+		}
+	  }
+	  #************************************ End of added by OL ************************************
+	  
       # Parse the strings we want
       open(F,"$installfolder/templates/plugins/$psubfolder/$lang/settings.html") || die "Missing template plugins/$psubfolder/$lang/settings.html";
       while (<F>)
@@ -603,11 +660,13 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
         print $_;
       }
       close(F);
-
+	
     # Parse page footer
-    &footer;
+	&footer;
     exit;
   }
+  
+  
 
 #####################################################
 # Error-Sub
@@ -628,6 +687,66 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
     &footer;
     exit;
   }
+  
+  
+########################################################################
+# Creating voice by T2S Plugin POST (Interface)
+##########################################################################
+
+sub t2svoice
+	{
+	use LWP::UserAgent;
+	use HTTP::Request;
+	use JSON qw( decode_json ); 
+	
+	$cmd = 'echo "'.localtime(time).' ## Sending POST Request to T2S Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
+	system ("echo '".$cmd."' >> $pluginjobfile");
+		
+	my $ua = LWP::UserAgent->new;
+	
+	# Getting text from config	
+	my $guide                           = int($query{'vg'});
+    if ( $guide == 0 )
+    {
+		print ( $phraseplugin->param('TXT_JOB_QUEUED_INVALID_VGID') );
+		print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
+		exit;
+    }
+    our $P2W_Text = "".param('P2W_Text'.$guide);
+	
+	my $ip = LoxBerry::System::get_localip();	
+	my $server_endpoint = "http://".$ip."/plugins/text2speech/index.php";
+	
+	# set custom HTTP request header fields
+	my $req = HTTP::Request->new(POST => $server_endpoint);
+	$req->header('content-type' => 'application/json');
+	
+	# add POST data to HTTP request body
+	my $post_data = '{ "text": "'.$P2W_Text.'", "greet": "0", "plugindir": "", "pluginlogdir": "", "pluginlogfile": "" }';
+	$req->content($post_data);
+	
+	my $resp = $ua->request($req);
+	
+	if ($resp->is_success) {
+		my $deccontent = $resp->decoded_content;
+		my $decoded_json = decode_json($deccontent);
+		our $ttsfile = $decoded_json->{"fullttspath"};
+		#$cmd = 'echo "'.localtime(time).' ## located File: '.$ttsfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+		#system ("echo '".$cmd."' >> $pluginjobfile");
+		#print Dumper $ttspath;
+	}
+	else {
+		$cmd = 'echo "'.localtime(time).' ## HTTP POST error code: '.$resp->code.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		$cmd = 'echo "'.localtime(time).' ## HTTP POST error message: '.$resp->message.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+	}
+	$cmd = 'echo "'.localtime(time).' ## Sending POST Request to T2S Plugin completed" 2>&1 >>'.$lbplogdir."/".$logfile;
+	system ("echo '".$cmd."' >> $pluginjobfile");
+	return;
+}
+  
+
 
 #####################################################
 # Page-Header-Sub
@@ -652,7 +771,8 @@ my $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir 
       }
     close(F);
   }
-
+  
+ 
 #####################################################
 # Footer
 #####################################################

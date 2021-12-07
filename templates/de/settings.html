@@ -14,14 +14,38 @@
                             </tr>
                             <tr>
                               <td>
-                                <select name="PLUGIN_USE" id="PLUGIN_USE" data-mini="true" data-track-theme="e" data-role="slider">
+                                <select onchange="pluguse()" name="PLUGIN_USE" id="PLUGIN_USE" data-mini="true" data-track-theme="e" data-role="slider">
                                   <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
                                   <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
                                 </select>
                               </td>
                             </tr>
+							<!--**************************************** Added by OL ************************************-->
+								<tr>
+								  <td><small><nobr><b><!--$TXT_LABEL_T2S_USE--></b></nobr></small></td>
+								</tr>
+								<tr>
+								  <td class="t2s_ext">
+									<select onchange="t2son()" name="T2S_USE" id="T2S_USE" data-mini="true" data-track-theme="e" data-role="slider">
+									  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+									  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+									</select>
+								  </td>
+								  <td style="height: 36px; width: 294px; text-align: right;">
+                                    <fieldset style="width: 82px">
+										<input name="T2S_INSTALLED" id="T2S_INSTALLED" type="hidden" value="<!--$T2S_INSTALLED-->">
+                                    </fieldset>
+									</td>
+									<tr>
+									<td class="t2s_ext_link">
+										<font size="-1"><a href="../text2speech/index.cgi" target="_blank">T2S Plugin</a></font>
+                                    </td>
+									</tr>
+								</tr>
+							<!--**************************************** End of added by OL ************************************-->
                           </table>
                           <script type="text/javascript">$('#PLUGIN_USE').val("<!--$PLUGIN_USE-->");</script>
+						  <script type="text/javascript">$('#T2S_USE').val("<!--$T2S_USE-->");</script>
                         </td>
                         <td align="center"><img src="/system/images/icons/<!--$psubfolder-->/icon_64.png"><br/><b><!--$MY_NAME--></b><br/><small><!--$PLUGIN_DESCRIPTION--></small>
                         <table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>
@@ -170,7 +194,7 @@
                           </tr>
                         </table>
                       </div>
-                    </form>
+					  </form>
                   <script type="text/javascript">
                     var at_least_one=0;
                     var firstrun=1;
@@ -310,4 +334,62 @@
                               $('#call_result'+vg_id_to_play).fadeTo( "slow", 0 );
                           }, 5000);
                     }
+					
+					
+
+					//**************************************** Added by OL ************************************
+					function pluguse()  
+					{
+						var plug_use = document.getElementById('PLUGIN_USE').value;
+						var t2s_use = document.getElementById('T2S_USE').value;
+						var t2s_inst = $("#T2S_INSTALLED").val();
+						if (plug_use == "on" && t2s_inst == "true" && t2s_use == "on") {
+							$('.t2s_ext_link').fadeIn(600);
+							$('.t2s_on').addClass('ui-disabled'); 
+							$('.t2s_ext').removeClass('ui-disabled'); 
+							console.log("Plugin active, T2S On");
+						} else if (plug_use == "on" && t2s_inst == "true" && t2s_use == "off") {
+							$('.t2s_ext_link').fadeIn(600);
+							$('.t2s_on').removeClass('ui-disabled'); 
+							$('.t2s_ext').removeClass('ui-disabled');
+							console.log("Plugin active, T2S Off");
+						} else if (plug_use == "off" && t2s_inst == "true" && t2s_use == "on") {
+							$('.t2s_ext_link').fadeOut(600);
+							$('.t2s_on').removeClass('ui-disabled'); 
+							$('.t2s_ext').addClass('ui-disabled');
+							console.log("Plugin not active, T2S On");
+						} else if (plug_use == "off" && t2s_inst == "true" && t2s_use == "off") {
+							$('.t2s_ext_link').fadeOut(600);
+							$('.t2s_on').removeClass('ui-disabled');
+							$('.t2s_ext').addClass('ui-disabled');
+							console.log("Plugin not active, T2S Off");
+						} else if (t2s_inst != "true") {
+							$('.t2s_ext_link').fadeOut(600);
+							$('.t2s_on').removeClass('ui-disabled');
+							$('.t2s_ext').addClass('ui-disabled');
+							console.log("T2S not installed");
+						}
+					}
+					
+					function t2son()  
+					{
+						var t2s_use = document.getElementById('T2S_USE').value;
+						var t2s_inst = $("#T2S_INSTALLED").val();
+						if (t2s_use == "on" && t2s_inst == "true") {
+							$('.t2s_on').addClass('ui-disabled'); 
+							console.log("Plugin active, T2S On");
+						} else {
+							$('.t2s_on').removeClass('ui-disabled');
+							console.log("Plugin active, T2S Off");
+						}
+					}
+					
+				
+					
+					$(document).ready(function() {
+						pluguse();
+						t2son();
+					});
+					
+					//**************************************** End of added by OL ************************************
                   </script>

@@ -260,16 +260,35 @@ else if($_REQUEST["mode"] == "make_call")
         $P2W_Text = str_replace("##", $msinfo, $P2W_Text);
       }
     }
-
-    debug('DBG_CREATE_JOB',$pluginjobfile,6);
-    $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
-    fwrite($pluginjobfile_handle, "$cmd \n");
-    debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
-    $cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
-    fwrite($pluginjobfile_handle, "$cmd \n");
-    debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
-    $check_result ="";
-    $debug_value  ='2>/dev/null';
+	
+	#********************** Added by OL ***********************************
+	$T2S_USE              = $plugin_cfg_array['T2S_USE'                            ];
+	if ($T2S_USE = "on") {
+		$lame                  = "/usr/bin/lame";
+		$jsonstr = t2s_post_request($P2W_Text);
+		$json = json_decode($jsonstr, True);
+		$ttsfile = $json['fullttspath'];
+		debug('DBG_CREATE_JOB',$pluginjobfile,6);
+		$cmd = exec($lame.' --decode '.$ttsfile.' '.$plugintmpfile).' 2>&1 >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
+		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		#print_r($test);
+	#**********************************************************************
+	
+	} else {
+		debug('DBG_CREATE_JOB',$pluginjobfile,6);
+		$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
+		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
+	}
+	$check_result ="";
+	$debug_value  ='2>/dev/null';
+	
     if ( $DEBUG_USE == "1" )
     {
       $debug_value = '2>&1';
@@ -319,6 +338,73 @@ else
 {
     $result = "?! :o(";
 }
+
+
+
+#********************** Added by OL ***********************************
+/**
+/* Funktion : t2s_post_request --> generiert einen POST request zum text2speech Plugin
+/*
+/* @param: 	$text, $greet, $lbplogdir, $plugindata, $pluginlogfile
+/* @return: JSON Array
+**/	
+
+function t2s_post_request($P2W_Text)   {
+	
+	global $plugindir, $lbplogdir, $plugindata, $pluginlogfile;
+	echo '<PRE>';
+	
+	$myIP 				  = LBSystem::get_localip();
+	
+	// Url
+	$url = 'http://'.$myIP.'/plugins/text2speech/index.php';
+		
+	// Initiate cURL.
+	$ch = curl_init($url);
+	
+	$greet = "0";
+	 
+	// populate JSON data.
+	$jsonData = array(
+		'text' => $P2W_Text,
+		'greet' => $greet,
+		'plugindir' => $plugindata['PLUGINDB_FOLDER'],
+		'pluginlogdir' => $lbplogdir,
+		'pluginlogfile' => $pluginlogfile
+	);
+		 
+	// Encode the array into JSON.
+	$jsonDataEncoded = json_encode($jsonData);
+				 
+	// Tell cURL that we want to send a POST request.
+	curl_setopt($ch, CURLOPT_POST, 1);
+	 
+	// Attach our encoded JSON string to the POST fields.
+	curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonDataEncoded);
+	 
+	// Set the content type to application/json
+	curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json')); 
+	
+	// Request response from Call
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		 
+	// Execute the request
+	$result = curl_exec($ch);
+	
+	#print_r(json_decode($result));
+	// was the request successful?
+	if($result === false)  {
+		#LOGGING("Der POST Request war nicht erfolgreich!", 7);
+		error_log( date('Y-m-d H:i:s ')." POST Request wasn't successfull\n", 3, $pluginlogfile);
+	} else {
+		error_log( date('Y-m-d H:i:s ')." POST Request was successfull. Data has been returned.\n", 5, $pluginlogfile);
+		#LOGGING("Der POST Request war erfolgreich!", 7);
+	}
+	// close cURL
+	curl_close($ch);
+	return $result;
+}
+#**********************************************************************
 
 header('Content-Type: text/plain; charset=utf-8');
 echo "$result";
