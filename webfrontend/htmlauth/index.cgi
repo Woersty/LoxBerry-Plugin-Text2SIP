@@ -308,8 +308,6 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
 		system ("echo '".$cmd."' >> $pluginjobfile");
 		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
 	}
-	#print Dumper $cmd;
-	
 	#************************* End of added by OL ***********************************
 	#********************************************************************************
 	
@@ -729,11 +727,11 @@ sub t2svoice
 	
 	if ($resp->is_success) {
 		my $deccontent = $resp->decoded_content;
-		my $decoded_json = decode_json($deccontent);
+		our $decoded_json = decode_json($deccontent);
 		our $ttsfile = $decoded_json->{"fullttspath"};
-		#$cmd = 'echo "'.localtime(time).' ## located File: '.$ttsfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
-		#system ("echo '".$cmd."' >> $pluginjobfile");
-		#print Dumper $ttspath;
+		$cmd = 'echo "'.localtime(time).' ## File location: '.$ttsfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+		system ("echo '".$cmd."' >> $pluginjobfile");
+		#print Dumper $ttsfile;
 	}
 	else {
 		$cmd = 'echo "'.localtime(time).' ## HTTP POST error code: '.$resp->code.'" 2>&1 >>'.$lbplogdir."/".$logfile;
@@ -746,6 +744,7 @@ sub t2svoice
 	return;
 }
   
+
 
 
 #####################################################

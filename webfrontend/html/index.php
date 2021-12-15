@@ -31,6 +31,7 @@ $plugin_phrase_array  = parse_ini_file("$pluginlanguagefile");
 $plugin_cfg_array     = parse_ini_file("$plugincfgfile");
 $DEBUG_USE            = $plugin_cfg_array['DEBUG_USE'                            ];
 $PLUGIN_USE           = $plugin_cfg_array['PLUGIN_USE'                           ];
+
 if ( !$PLUGIN_USE == "on" ) { die( $PLUGIN_USE.$plugin_phrase_array['ERROR0003'] ); }
 
 if (!is_dir($lbplogdir)) 
@@ -262,9 +263,17 @@ else if($_REQUEST["mode"] == "make_call")
     }
 	
 	#********************** Added by OL ***********************************
-	$T2S_USE              = $plugin_cfg_array['T2S_USE'                            ];
-	if ($T2S_USE = "on") {
-		$lame                  = "/usr/bin/lame";
+	$T2S_USE = $plugin_cfg_array['T2S_USE'];
+	if (!$T2S_USE == "on") {
+		debug('DBG_CREATE_JOB',$pluginjobfile,6);
+		$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
+		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
+	} else {
+		$lame = "/usr/bin/lame";
 		$jsonstr = t2s_post_request($P2W_Text);
 		$json = json_decode($jsonstr, True);
 		$ttsfile = $json['fullttspath'];
@@ -274,18 +283,9 @@ else if($_REQUEST["mode"] == "make_call")
 		debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
 		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
 		fwrite($pluginjobfile_handle, "$cmd \n");
-		#print_r($test);
+	}
 	#**********************************************************************
 	
-	} else {
-		debug('DBG_CREATE_JOB',$pluginjobfile,6);
-		$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
-		debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
-		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
-		debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
-	}
 	$check_result ="";
 	$debug_value  ='2>/dev/null';
 	
