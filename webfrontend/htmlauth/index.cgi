@@ -86,9 +86,14 @@ our $req;
 our $DEBUG_USE  = "off";
 our $PLUGIN_USE = "off";
 #*********************** Added by OL *************************************
-our $T2S_INSTALLED;
+our $T2S_INSTALLED = "false";
 our $T2S_USE = "off";
 our $ttsfile;
+our $lame = "/usr/bin/lame";
+our $T2SPlugFolder = 'Text-2-Speech';
+our $T2SminVers = '1.2.1';
+our $P2W_Text;
+our $P2W_lang;
 #*************************************************************************
 our $res;
 our $wgetbin    = "wget";
@@ -206,6 +211,21 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
   {
     ${$template_string} = $phraseplugin->param($template_string);
   }
+  
+	#**************************************** Added by OL ************************************
+	# Check if Text-2-speech Plugin is installed
+	#$T2S_INSTALLED = "false";
+	  
+	my @plugins = LoxBerry::System::get_plugins();
+	#print Dumper @plugins;
+	foreach my $plugin (@plugins) {
+		if ($plugin->{PLUGINDB_TITLE} eq $T2SPlugFolder) {
+			if ($plugin->{PLUGINDB_VERSION} ge $T2SminVers) {
+				$T2S_INSTALLED = "true";
+			}
+		}
+	}
+	#************************************ End of added by OL ************************************
 
 
 ##########################################################################
@@ -286,32 +306,16 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
 	#**************************** Added by OL ***************************************
 	# Get saved value from config
 	$T2S_USE = param('T2S_USE');
-	if ( $T2S_USE eq "on" ) {
-		my $lame = "/usr/bin/lame";
-		$cmd = 'echo "'.localtime(time).' ## Generating voice from T2S Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
-		system ("echo '".$cmd."' >> $pluginjobfile");
+	#$T2S_INSTALLED = param('T2S_INSTALLED');
+	if ( $T2S_USE eq "on" and $T2S_INSTALLED eq "true") {
+		# Use TTS
 		&t2svoice;
-		$cmd = 'echo "'.localtime(time).' ## Generated voice from T2S Plugin has been received" 2>&1 >>'.$lbplogdir."/".$logfile;
-		system ("echo '".$cmd."' >> $pluginjobfile");
-		$cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
-		system ("echo '".$cmd."' >> $pluginjobfile");
-		$cmd = $lame.' --decode '.$ttsfile.' '.$plugintmpfile;
-		system ($cmd);
-		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
 	} else {
-		$cmd = 'echo "'.localtime(time).' ## Generating voice " 2>&1 >>'.$lbplogdir."/".$logfile;
-		system ("echo '".$cmd."' >> $pluginjobfile");
-		$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$lbplogdir."/".$logfile;
-		if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
-		system ("echo '".$cmd."' >> $pluginjobfile");
-		$cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
-		system ("echo '".$cmd."' >> $pluginjobfile");
-		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+		# Use Pico
+		&usepico;
 	}
 	#************************* End of added by OL ***********************************
-	#********************************************************************************
-	
-    
+	    
     if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
     system ("echo '".$cmd."' >> $pluginjobfile");
 
@@ -588,9 +592,9 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
       {
         $LAST_ID                          =  $plugin_cfg->param('default.LAST_ID'                     );
         $PLUGIN_USE                       =  $plugin_cfg->param('default.PLUGIN_USE'                  );
-		#********************** Added by OL ***********************************
+		#**************************************** Added by OL *********************************************
 		$T2S_USE                       	  =  $plugin_cfg->param('default.T2S_USE'                  );
-		#**********************************************************************
+		#**************************************************************************************************
         $DEBUG_USE                        =  $plugin_cfg->param('default.DEBUG_USE'                   );
         for ($vg_id=1; $vg_id <= $LAST_ID; $vg_id++)
         {
@@ -636,13 +640,15 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
 	  
 	  #**************************************** Added by OL ************************************
 	  # Check if Text-2-speech Plugin is installed
-	  $T2S_INSTALLED = "false";
+	  #$T2S_INSTALLED = "false";
 	  
 	  my @plugins = LoxBerry::System::get_plugins();
+	  #print Dumper @plugins;
 	  foreach my $plugin (@plugins) {
-		if ($plugin->{PLUGINDB_TITLE} eq "Text-2-Speech") {
-			$T2S_INSTALLED = "true";
-			next;
+		if ($plugin->{PLUGINDB_TITLE} eq $T2SPlugFolder) {
+			if ($plugin->{PLUGINDB_VERSION} ge $T2SminVers) {
+				$T2S_INSTALLED = "true";
+			}
 		}
 	  }
 	  #************************************ End of added by OL ************************************
@@ -687,7 +693,7 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
   }
   
   
-########################################################################
+##########################################################################
 # Creating voice by T2S Plugin POST (Interface)
 ##########################################################################
 
@@ -695,7 +701,9 @@ sub t2svoice
 	{
 	use LWP::UserAgent;
 	use HTTP::Request;
-	use JSON qw( decode_json ); 
+	use JSON qw( decode_json );
+
+	our $decoded_json;	
 	
 	$cmd = 'echo "'.localtime(time).' ## Sending POST Request to T2S Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
 	system ("echo '".$cmd."' >> $pluginjobfile");
@@ -710,8 +718,9 @@ sub t2svoice
 		print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
 		exit;
     }
-    our $P2W_Text = "".param('P2W_Text'.$guide);
+    $P2W_Text = "".param('P2W_Text'.$guide);
 	
+	# Get IP from Loxberry
 	my $ip = LoxBerry::System::get_localip();	
 	my $server_endpoint = "http://".$ip."/plugins/text2speech/index.php";
 	
@@ -723,28 +732,84 @@ sub t2svoice
 	my $post_data = '{ "text": "'.$P2W_Text.'", "greet": "0", "plugindir": "", "pluginlogdir": "", "pluginlogfile": "" }';
 	$req->content($post_data);
 	
+	# send POST request
 	my $resp = $ua->request($req);
 	
 	if ($resp->is_success) {
 		my $deccontent = $resp->decoded_content;
-		our $decoded_json = decode_json($deccontent);
-		our $ttsfile = $decoded_json->{"fullttspath"};
+		# Error handling if invalid JSON received and Voice file is not available in T2S
+		eval {
+			  decode_json($deccontent);
+			  1;
+			} or do {
+			  $cmd = 'echo "'.localtime(time).' ## Invalid JSON Content received, fall back to Pico" 2>&1 >>'.$lbplogdir."/".$logfile;
+			  system ("echo '".$cmd."' >> $pluginjobfile");
+			  $cmd = 'echo "'.localtime(time).' ## Please check Text-2-speech settings/Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
+			  system ("echo '".$cmd."' >> $pluginjobfile");
+			  &usepico;
+			  return;
+			};
+		my $decoded_json = decode_json($deccontent);
+		if ($decoded_json->{"success"} = "3")  {
+			$cmd = 'echo "'.localtime(time).' ## Invalid JSON Content received, fall back to Pico" 2>&1 >>'.$lbplogdir."/".$logfile;
+			system ("echo '".$cmd."' >> $pluginjobfile");
+			$cmd = 'echo "'.localtime(time).' ## Error message received from Text-2-Speech: '.$decoded_json->{"warning"}.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+			system ("echo '".$cmd."' >> $pluginjobfile");
+			$cmd = 'echo "'.localtime(time).' ## Please check Text-2-Speech settings/Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
+			system ("echo '".$cmd."' >> $pluginjobfile");
+			&usepico;
+			return;
+		}
+		$ttsfile = $decoded_json->{"fullttspath"};
 		$cmd = 'echo "'.localtime(time).' ## File location: '.$ttsfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
 		system ("echo '".$cmd."' >> $pluginjobfile");
-		#print Dumper $ttsfile;
-	}
-	else {
+	} else {
 		$cmd = 'echo "'.localtime(time).' ## HTTP POST error code: '.$resp->code.'" 2>&1 >>'.$lbplogdir."/".$logfile;
 		system ("echo '".$cmd."' >> $pluginjobfile");
 		$cmd = 'echo "'.localtime(time).' ## HTTP POST error message: '.$resp->message.'" 2>&1 >>'.$lbplogdir."/".$logfile;
 		system ("echo '".$cmd."' >> $pluginjobfile");
+		&usepico;
 	}
 	$cmd = 'echo "'.localtime(time).' ## Sending POST Request to T2S Plugin completed" 2>&1 >>'.$lbplogdir."/".$logfile;
 	system ("echo '".$cmd."' >> $pluginjobfile");
-	return;
+	&usetts;
 }
   
+  
+##########################################################################
+# Use Pico for voice
+##########################################################################
 
+sub usepico
+{
+	# Use Pico for voice
+	$cmd = 'echo "'.localtime(time).' ## Generating voice " 2>&1 >>'.$lbplogdir."/".$logfile;
+	system ("echo '".$cmd."' >> $pluginjobfile");
+	$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+	if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
+	system ("echo '".$cmd."' >> $pluginjobfile");
+	$cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
+	system ("echo '".$cmd."' >> $pluginjobfile");
+	$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;	
+}
+
+##########################################################################
+# Use T2S for voice
+##########################################################################
+
+sub usetts
+{	
+	# Use Text-2-speech for voice
+	$cmd = 'echo "'.localtime(time).' ## Generating voice from T2S Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
+	system ("echo '".$cmd."' >> $pluginjobfile");
+	$cmd = 'echo "'.localtime(time).' ## Generated voice from T2S Plugin has been received" 2>&1 >>'.$lbplogdir."/".$logfile;
+	system ("echo '".$cmd."' >> $pluginjobfile");
+	$cmd = 'echo "'.localtime(time).' ## Converting voice " 2>&1 >>'.$lbplogdir."/".$logfile;
+	system ("echo '".$cmd."' >> $pluginjobfile");
+	$cmd = $lame.' --decode '.$ttsfile.' '.$plugintmpfile;
+	system ($cmd);
+	$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$lbplogdir."/".$logfile;
+}
 
 
 #####################################################

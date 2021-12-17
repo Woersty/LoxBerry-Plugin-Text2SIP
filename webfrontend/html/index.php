@@ -23,6 +23,9 @@ $user                 ="Text2SIP";
 $pass                 ="loxberry";
 $pico2wave            = "/usr/bin/pico2wave";
 $sox                  = "/usr/bin/sox";
+#********************** Added/changed by OL ***********************************
+$lame 				  = "/usr/bin/lame";
+#******************************************************************************
 $sipcmd               = $mydir."/../../../../webfrontend/htmlauth/plugins/$psubdir/bin/sipcmd";
 $option_o             = ""; # Heavy sipcmd Debug 
 
@@ -262,34 +265,36 @@ else if($_REQUEST["mode"] == "make_call")
       }
     }
 	
-	#********************** Added by OL ***********************************
-	$T2S_USE = $plugin_cfg_array['T2S_USE'];
-	if (!$T2S_USE == "on") {
-		debug('DBG_CREATE_JOB',$pluginjobfile,6);
-		$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
-		debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
-		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
-		debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
-	} else {
-		$lame = "/usr/bin/lame";
-		$jsonstr = t2s_post_request($P2W_Text);
-		$json = json_decode($jsonstr, True);
-		$ttsfile = $json['fullttspath'];
-		debug('DBG_CREATE_JOB',$pluginjobfile,6);
-		$cmd = exec($lame.' --decode '.$ttsfile.' '.$plugintmpfile).' 2>&1 >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
-		debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
-		$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
+	#********************** Added/changed by OL ***********************************
+	$plugins = LBSystem::get_plugins();
+	# Text-2-Speech Plugin Name from Plugins DB
+	$T2SPlugin = "Text-2-Speech";
+	$T2S_INSTALLED = "false";
+	$minreleaset2s = "1.2.1";
+	# check if Text-2-Speech Plugin is installed
+	foreach($plugins as $plugin) {
+		if ($plugin['PLUGINDB_TITLE'] == $T2SPlugin) {
+			# check if min Version of Text-2-Speech is installed
+			if ($plugin['PLUGINDB_VERSION'] >= $minreleaset2s) {
+				$T2S_INSTALLED = "true";
+			}
+		}
 	}
-	#**********************************************************************
+	$T2S_USE = $plugin_cfg_array['T2S_USE'];
+	if ($T2S_INSTALLED == "false" or $T2S_USE == "") {
+		usepico();
+	} else {
+		uset2s();
+	}
+	#*******************************************************************************
+	
+	$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
+	fwrite($pluginjobfile_handle, "$cmd \n");
+	debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
 	
 	$check_result ="";
 	$debug_value  ='2>/dev/null';
-	
-    if ( $DEBUG_USE == "1" )
+	if ( $DEBUG_USE == "1" )
     {
       $debug_value = '2>&1';
       $option_o = " -o $sipcmdlogfile ";
@@ -343,6 +348,60 @@ else
 
 #********************** Added by OL ***********************************
 /**
+/* Funktion : usepico --> Use Pico to create voice
+/*
+/* @param: 	none
+/* @return: empty
+**/	
+
+function usepico()   {
+	
+	global $pluginjobfile, $cmd, $pico2wave, $P2W_lang, $plugintmpfile, $P2W_Text, $pluginlogfile, $sox, $pluginwavfile, $pluginjobfile_handle;
+	
+	debug('DBG_CREATE_JOB',$pluginjobfile,6);
+	$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
+	fwrite($pluginjobfile_handle, "$cmd \n");
+	return;
+}
+
+
+
+/**
+/* Funktion : uset2s --> Use Text-2-Speech Interface to create voice
+/*
+/* @param: 	none
+/* @return: empty
+**/	
+
+function uset2s()   {
+	
+	global $pluginjobfile, $plugintmpfile, $P2W_Text, $pluginlogfile, $sox, $pluginwavfile, $lame, $ttsfile, $pluginjobfile_handle, $cmd;
+	
+	debug('DBG_CREATE_JOB',$pluginjobfile,6);
+	$jsonstr = t2s_post_request($P2W_Text);
+	$json = json_decode($jsonstr, True);
+	# Additional Error handling if something went wrong during Text-2-speech Voice file creation
+	if ($json['success'] != "1")  {
+		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_CMD_TO_JOB'].$json['warning']."\n", 3, $pluginlogfile);
+		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_CMD_TO_JOB']."Fall back to Pico\n", 3, $pluginlogfile);
+		debug('DBG_ADD_CMD_TO_JOB',$pluginjobfile,6);
+		$cmd = $json['warning'].' >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		$cmd = 'Fall back to Pico >>'.$pluginlogfile;
+		fwrite($pluginjobfile_handle, "$cmd \n");
+		# Fall back to Pico
+		usepico();
+    } 
+	$ttsfile = $json['fullttspath'];
+	debug('DBG_CREATE_JOB',$pluginjobfile,6);
+	$cmd = exec($lame.' --decode '.$ttsfile.' '.$plugintmpfile).' 2>&1 >>'.$pluginlogfile;
+	fwrite($pluginjobfile_handle, "$cmd \n");
+	return;
+}
+	
+	
+	
+/**
 /* Funktion : t2s_post_request --> generiert einen POST request zum text2speech Plugin
 /*
 /* @param: 	$text, $greet, $lbplogdir, $plugindata, $pluginlogfile
@@ -352,9 +411,9 @@ else
 function t2s_post_request($P2W_Text)   {
 	
 	global $plugindir, $lbplogdir, $plugindata, $pluginlogfile;
-	echo '<PRE>';
+	#echo '<PRE>';
 	
-	$myIP 				  = LBSystem::get_localip();
+	$myIP = LBSystem::get_localip();
 	
 	// Url
 	$url = 'http://'.$myIP.'/plugins/text2speech/index.php';
@@ -394,11 +453,9 @@ function t2s_post_request($P2W_Text)   {
 	#print_r(json_decode($result));
 	// was the request successful?
 	if($result === false)  {
-		#LOGGING("Der POST Request war nicht erfolgreich!", 7);
 		error_log( date('Y-m-d H:i:s ')." POST Request wasn't successfull\n", 3, $pluginlogfile);
 	} else {
 		error_log( date('Y-m-d H:i:s ')." POST Request was successfull. Data has been returned.\n", 5, $pluginlogfile);
-		#LOGGING("Der POST Request war erfolgreich!", 7);
 	}
 	// close cURL
 	curl_close($ch);

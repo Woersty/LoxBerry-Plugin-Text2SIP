@@ -1,1 +1,5 @@
-libssl1.0-dev sox task-spooler lame
+libssl1.0.2 
+libssl1.0-dev 
+sox 
+task-spooler 
+lame

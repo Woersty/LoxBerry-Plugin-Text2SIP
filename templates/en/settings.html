@@ -194,7 +194,7 @@
                           </tr>
                         </table>
                       </div>
-                    </form>
+					  </form>
                   <script type="text/javascript">
                     var at_least_one=0;
                     var firstrun=1;
@@ -336,6 +336,7 @@
                     }
 					
 					
+
 					//**************************************** Added by OL ************************************
 					function pluguse()  
 					{
@@ -376,10 +377,10 @@
 						var t2s_inst = $("#T2S_INSTALLED").val();
 						if (t2s_use == "on" && t2s_inst == "true") {
 							$('.t2s_on').addClass('ui-disabled'); 
-							console.log("Plugin active, T2S On");
+							console.log("Plugin active, T2S On - FP");
 						} else {
 							$('.t2s_on').removeClass('ui-disabled');
-							console.log("Plugin active, T2S Off");
+							console.log("Plugin active, T2S Off - FP");
 						}
 					}
 					
@@ -387,7 +388,7 @@
 					
 					$(document).ready(function() {
 						pluguse();
-						t2son();
+						//t2son();
 					});
 					
 					//**************************************** End of added by OL ************************************
