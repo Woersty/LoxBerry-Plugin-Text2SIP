@@ -739,8 +739,7 @@ sub t2svoice
 		my $deccontent = $resp->decoded_content;
 		# Error handling if invalid JSON received and Voice file is not available in T2S
 		eval {
-			  decode_json($deccontent);
-			  1;
+			my $decoded_json = decode_json($deccontent);
 			} or do {
 			  $cmd = 'echo "'.localtime(time).' ## Invalid JSON Content received, fall back to Pico" 2>&1 >>'.$lbplogdir."/".$logfile;
 			  system ("echo '".$cmd."' >> $pluginjobfile");
@@ -750,7 +749,7 @@ sub t2svoice
 			  return;
 			};
 		my $decoded_json = decode_json($deccontent);
-		if ($decoded_json->{"success"} = "3")  {
+		if ($decoded_json->{"success"} == "3")  {
 			$cmd = 'echo "'.localtime(time).' ## Invalid JSON Content received, fall back to Pico" 2>&1 >>'.$lbplogdir."/".$logfile;
 			system ("echo '".$cmd."' >> $pluginjobfile");
 			$cmd = 'echo "'.localtime(time).' ## Error message received from Text-2-Speech: '.$decoded_json->{"warning"}.'" 2>&1 >>'.$lbplogdir."/".$logfile;
