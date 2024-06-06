@@ -52,6 +52,8 @@ then
   if [ $? -eq 0 ]
   then
     echo `date +"%b  %e %H:%M:%S "`"Copy of sipcmd for Architecture $arch successfully completed."                      2>&1 >>$logfile
+    chown loxberry:loxberry REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                            2>&1 >>$logfile
+    chmod 755 REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                                         2>&1 >>$logfile
   else
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of sipcmd for Architecture $arch failed. That is bad!"                      2>&1 >>$logfile
   fi
