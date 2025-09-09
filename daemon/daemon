@@ -41,12 +41,28 @@ then
   mkdir wav
   chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
   chmod 755 wav                                                                                                                2>&1 >>$logfile
+  arch=`dpkg --print-architecture`                                                                                  2>&1 >>$logfile
+  echo `date +"%b  %e %H:%M:%S "`"Systemarchitecture $arch recognized."                                                   2>&1 >>$logfile
+  cd $datafolder/$arch                                                                                  2>&1 >>$logfile
+  if [ $? -ne 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Path $arch not exists. That is bad!"                                         2>&1 >>$logfile
+  fi
+  cp sipcmd REPLACELBPHTMLAUTHDIR/bin/                                                                                        2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Copy of sipcmd for Architecture $arch successfully completed."                      2>&1 >>$logfile
+    chown loxberry:loxberry REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                            2>&1 >>$logfile
+    chmod 755 REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                                         2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of sipcmd for Architecture $arch failed. That is bad!"                      2>&1 >>$logfile
+  fi
   cp lib*.so.* /usr/lib/                                                                                                    2>&1 >>$logfile
   if [ $? -eq 0 ]
   then
-    echo `date +"%b  %e %H:%M:%S "`"Copy of libraries libopal libpt libspeexdsp libcapi20 and libodbc successfully completed." 2>&1 >>$logfile
+    echo `date +"%b  %e %H:%M:%S "`"Copy of libraries successfully completed." 2>&1 >>$logfile
   else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries libopal libpt libspeexdsp libcapi20 or libodbc failed. That is bad!"  2>&1 >>$logfile
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries  failed. That is bad!"  2>&1 >>$logfile
   fi
   echo `date +"%b  %e %H:%M:%S "`"Try to install packages"                                                                     2>&1 >>$logfile
   dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile

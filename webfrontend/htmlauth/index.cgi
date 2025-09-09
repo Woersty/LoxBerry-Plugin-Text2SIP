@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2016 Christian Woerstenfeld, git@loxberry.woerstenfeld.de
+# Copyright 2025 Oliver Lewald
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ our $wgetbin    = "wget";
 
 
 # Version of this script
-  $version = "v2019.02.12";
+  $version = "v2025.09.09";
 
 my $logfile 					= "Text2SIP.log";
 our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/". $logfile, append => 1 );
