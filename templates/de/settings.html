@@ -1,4 +1,31 @@
-                  <div id="dialog"></div>
+					<style>
+					/* Zeile mit Switch + Link */
+						.t2s_row {
+						  display: flex;
+						  align-items: center;
+						  gap: 10px; /* Abstand zwischen Switch und Link */
+						}
+
+						/* nur der Link weiter rechts */
+						.t2s_row .t2s_use_label {
+						  white-space: nowrap;
+						  font-size: smaller;
+						  margin-left: 10px;   /* Abstand nach links */
+						}
+
+						/* Label-Spalte für sauberes Ausrichten */
+						.t2s_label_cell {
+						  width: 140px;
+						}
+
+						/* Nur das IP-Eingabefeld weiter nach rechts verschieben */
+						#T2S_IP,
+						.ui-input-text #T2S_IP {
+						  text-align: left !important;  /* Text im Feld linksbündig */
+						}
+					</style>
+				  
+				  <div id="dialog"></div>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/jquery-ui-1.9.2.custom.min.js"></script>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/countrySelect.min.js"></script>
                   <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css">
@@ -21,31 +48,58 @@
                               </td>
                             </tr>
 							<!--**************************************** Added by OL ************************************-->
+								<!-- ====== HTML ====== -->
+								<!-- Label über dem Switch -->
 								<tr>
-								  <td><small><nobr><b><!--$TXT_LABEL_T2S_USE--></b></nobr></small></td>
-								</tr>
-								<tr>
-								  <td class="t2s_ext">
-									<select onchange="t2son()" name="T2S_USE" id="T2S_USE" data-mini="true" data-track-theme="e" data-role="slider">
-									  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
-									  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
-									</select>
+								  <td class="t2s_label_cell" colspan="2">
+									<small><nobr><b><!--$TXT_LABEL_T2S_USE--></b></nobr></small>
 								  </td>
-								  <td style="height: 36px; width: 294px; text-align: right;">
-                                    <fieldset style="width: 82px">
-										<input name="T2S_INSTALLED" id="T2S_INSTALLED" type="hidden" value="<!--$T2S_INSTALLED-->">
-                                    </fieldset>
-									</td>
-									<tr>
-									<td class="t2s_ext_link">
-										<font size="-1"><a href="../text2speech/index.cgi" target="_blank">T2S Plugin</a></font>
-                                    </td>
-									</tr>
 								</tr>
+
+								<!-- Switch + Link nebeneinander (Flex in EINER Tabellenzelle) -->
+								<tr>
+								  <td colspan="2">
+									<div class="t2s_row">
+									  <select onchange="t2son()" name="T2S_USE" id="T2S_USE"
+											  data-mini="true" data-track-theme="e" data-role="slider">
+										<option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+										<option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+									  </select>
+
+									  <!-- Link direkt neben dem Switch -->
+									  <span class="t2s_use_label t2s_ip_row">
+										<a href="../text2speech/index.cgi" target="_blank"><!--$TXT_LABEL_T2S--></a>
+									  </span>
+
+									  <!-- Hidden: installiert-Flag -->
+									  <input type="hidden" id="T2S_INSTALLED" name="T2S_INSTALLED" value="<!--$T2S_INSTALLED-->">
+									</div>
+								  </td>
+								</tr>
+
+								<!-- IP-Adresse (Label links, Feld rechts) -->
+								<tr class="t2s_ip_row">
+								  <td class="t2s_label_cell">
+									<label for="T2S_IP">
+									  <small><nobr><b><!--$TXT_LABEL_IP--></b></nobr></small>
+									</label>
+								  </td>
+								  <td>
+									<input type="text" name="T2S_IP" id="T2S_IP"
+										   value="<!--$T2S_IP-->"
+										   placeholder="<!--$TXT_LABEL_T2S_IP-->"
+										   style="width:180px;"
+										   pattern="^(([0-9]{1,3}\.){3}[0-9]{1,3})$">
+								  </td>
+								</tr>
+
+
+
 							<!--**************************************** End of added by OL ************************************-->
                           </table>
                           <script type="text/javascript">$('#PLUGIN_USE').val("<!--$PLUGIN_USE-->");</script>
 						  <script type="text/javascript">$('#T2S_USE').val("<!--$T2S_USE-->");</script>
+						  <script type="text/javascript">$('#T2S_IP').val("<!--$T2S_IP-->");</script>
                         </td>
                         <td align="center"><img src="/system/images/icons/<!--$psubfolder-->/icon_64.png"><br/><b><!--$MY_NAME--></b><br/><small><!--$PLUGIN_DESCRIPTION--></small>
                         <table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>
@@ -184,7 +238,8 @@
                             </td>
                           </tr>
                         </table>
-												<table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        <table>
+						<table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        
+						<table>
                           <tr>
                             <td width="550px">
                               <center>
@@ -338,38 +393,154 @@
 					
 
 					//**************************************** Added by OL ************************************
-					function pluguse()  
-					{
-						var plug_use = document.getElementById('PLUGIN_USE').value;
-						var t2s_use = document.getElementById('T2S_USE').value;
-						var t2s_inst = $("#T2S_INSTALLED").val();
-						if (plug_use == "on" && t2s_inst == "true" && t2s_use == "on") {
-							$('.t2s_ext_link').fadeIn(600);
-							$('.t2s_on').addClass('ui-disabled'); 
-							$('.t2s_ext').removeClass('ui-disabled'); 
-							console.log("Plugin active, T2S On");
-						} else if (plug_use == "on" && t2s_inst == "true" && t2s_use == "off") {
-							$('.t2s_ext_link').fadeIn(600);
-							$('.t2s_on').removeClass('ui-disabled'); 
-							$('.t2s_ext').removeClass('ui-disabled');
-							console.log("Plugin active, T2S Off");
-						} else if (plug_use == "off" && t2s_inst == "true" && t2s_use == "on") {
-							$('.t2s_ext_link').fadeOut(600);
-							$('.t2s_on').removeClass('ui-disabled'); 
-							$('.t2s_ext').addClass('ui-disabled');
-							console.log("Plugin not active, T2S On");
-						} else if (plug_use == "off" && t2s_inst == "true" && t2s_use == "off") {
-							$('.t2s_ext_link').fadeOut(600);
-							$('.t2s_on').removeClass('ui-disabled');
-							$('.t2s_ext').addClass('ui-disabled');
-							console.log("Plugin not active, T2S Off");
-						} else if (t2s_inst != "true") {
-							$('.t2s_ext_link').fadeOut(600);
-							$('.t2s_on').removeClass('ui-disabled');
-							$('.t2s_ext').addClass('ui-disabled');
-							console.log("T2S not installed");
-						}
+					function isValidIPv4(ip) {
+					  // einfache Prüfung 0-255 pro Oktett
+					  var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip || '');
+					  if (!m) return false;
+					  for (var i=1;i<=4;i++) {
+						var n = parseInt(m[i], 10);
+						if (n < 0 || n > 255) return false;
+					  }
+					  return true;
 					}
+
+					// Dein vorhandener Hook-Name im HTML onchange: t2son()
+					function t2son() {
+					  pluguse();
+					}
+
+					// Dein bestehendes pluguse – leicht gestrafft und IP-Feld integriert
+					function pluguse() {
+					  var plug_use = $('#PLUGIN_USE').val();      // angenommen: gibt's auf der Seite
+					  var t2s_use  = $('#T2S_USE').val();
+					  var t2s_ip   = $('#T2S_IP').val();
+					  var t2s_inst = $('#T2S_INSTALLED').val();   // "true" / "false"
+
+					  // Sichtbarkeit Linkzeile immer zeigen wie bisher
+					  $('.t2s_ext_link').show();
+
+					  var enableFields = (plug_use === 'on' && t2s_inst === 'true' && t2s_use === 'on');
+
+					  // Enable/Disable der ganzen T2S-Extras (inkl. IP-Zeile)
+					  if (enableFields) {
+						$('.t2s_ext').removeClass('ui-disabled');
+						$('#T2S_IP').prop('disabled', false);
+					  } else {
+						$('.t2s_ext').addClass('ui-disabled');
+						$('#T2S_IP').prop('disabled', true);
+					  }
+
+					  // Konsolen-Logik (optional)
+					  if      (plug_use === 'on'  && t2s_inst === 'true' && t2s_use === 'on')  console.log('Plugin active, T2S On');
+					  else if (plug_use === 'on'  && t2s_inst === 'true' && t2s_use === 'off') console.log('Plugin active, T2S Off');
+					  else if (plug_use === 'off' && t2s_inst === 'true' && t2s_use === 'on')  console.log('Plugin not active, T2S On');
+					  else if (plug_use === 'off' && t2s_inst === 'true' && t2s_use === 'off') console.log('Plugin not active, T2S Off');
+					  else if (t2s_inst !== 'true')                                             console.log('T2S not installed');
+
+					  // (optional) Live-Validierung – nur wenn Feld enabled
+					  if (enableFields) {
+						if (t2s_ip && !isValidIPv4(t2s_ip)) {
+						  $('#T2S_IP')[0].setCustomValidity('Ungültige IPv4-Adresse (z.B. 192.168.1.100)');
+						} else {
+						  $('#T2S_IP')[0].setCustomValidity('');
+						}
+					  } else {
+						// Falls disabled, keine Fehlermeldung stehen lassen
+						$('#T2S_IP')[0].setCustomValidity('');
+					  }
+					}
+
+					// Initialisierung beim Laden / jQuery Mobile Page Events
+					$(document).on('pageinit pageshow ready', function () {
+					  // Falls du den T2S_USE Wert aus dem Template vorbelegen willst:
+					  // Beispiel: wenn du <!--$T2S_USE--> als "on"/"off" in ein data-Attribut legst.
+					  // $('#T2S_USE').val('<!--$T2S_USE-->').slider('refresh');
+
+					  // Events binden
+					  $('#PLUGIN_USE').on('change', pluguse);
+					  $('#T2S_USE').on('change', function(){
+						// jQuery Mobile Slider ggf. refreshen
+						try { $('#T2S_USE').slider('refresh'); } catch(e) {}
+						pluguse();
+					  });
+					  $('#T2S_IP').on('input blur', pluguse);
+
+					  // Initialer Zustand
+					  pluguse();
+					});
+
+
+					function toggleT2SLabel() {
+					  var v = $('#T2S_INSTALLED').val();
+					  if (v === 'true') {
+						$('.t2s_use_label').show();
+					  } else {
+						$('.t2s_use_label').hide();
+					  }
+					}
+
+					function toggleT2SIpRow() {
+					  var t2s_use = $('#T2S_USE').val();
+					  if (t2s_use === 'on') {
+						$('.t2s_ip_row').show();
+					  } else {
+						$('.t2s_ip_row').hide();
+					  }
+					}
+
+					function toggleLangField() {
+					  const t2sUse = $('#T2S_USE').val();   // "on" oder "off"
+					  const lock = (t2sUse === 'on');
+
+					  // nur Felder P2W_lang sperren/freigeben
+					  $("input[id^='P2W_lang']").prop('readonly', lock)
+						.closest('.ui-input-text')
+						.toggleClass('ui-disabled ui-state-disabled', lock);
+					}
+					
+					
+
+					
+
+					// 1) Sofort beim Laden
+					$(document).on('pageinit pageshow ready', function () {
+					  toggleT2SLabel();
+					  toggleT2SIpRow();
+					  toggleLangField();
+					  $('#T2S_USE').on('change', toggleLangField); // bei Switch-Änderung
+					  
+					  $('#T2S_USE').on('change', function() {
+						toggleT2SIpRow();
+						$('#T2S_USE').on('change', toggleLangField); // bei Switch-Änderung
+					  });
+
+					  // 2) Auf normale Events reagieren (falls Hidden -> per Code geändert)
+					  $('#T2S_INSTALLED').on('change input t2sinst:changed', toggleT2SLabel);
+
+					  // 3) Patch: Wenn jQuery .val() per Code auf T2S_INSTALLED aufgerufen wird,
+					  //    feuern wir ein Custom-Event, damit toggleT2SLabel() reagiert.
+					  (function ($) {
+						var _val = $.fn.val;
+						$.fn.val = function () {
+						  var ret = _val.apply(this, arguments);
+						  if (arguments.length && this.length && this.is('#T2S_INSTALLED')) {
+							// nach programmatischem Setzen
+							this.trigger('t2sinst:changed');
+						  }
+						  return ret;
+						};
+					  })(jQuery);
+
+					  // 4) Fallback: Polling, falls irgendein Script direkt .value ändert
+					  var __lastVal = $('#T2S_INSTALLED').val();
+					  setInterval(function () {
+						var cur = $('#T2S_INSTALLED').val();
+						if (cur !== __lastVal) {
+						  __lastVal = cur;
+						  toggleT2SLabel();
+						}
+					  }, 500);
+					});
 					
 					function t2son()  
 					{
