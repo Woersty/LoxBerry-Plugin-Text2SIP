@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2025 Oliver Lewald
+# Copyright 2016 Christian Woerstenfeld, git@loxberry.woerstenfeld.de
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,28 +20,22 @@
 ##########################################################################
 
 use LoxBerry::System;
-use LoxBerry::Web;
 use LoxBerry::Log;
-use CGI::Carp qw(fatalsToBrowser);
+use LoxBerry::IO;
 use CGI qw/:standard/;
 use Config::Simple '-strict';
 use File::HomeDir;
-use Data::Dumper;
 use Cwd 'abs_path';
-use HTML::Entities;
-use URI::Escape;
-use MIME::Base64 qw( decode_base64 );
-use Time::HiRes qw(usleep);
 use File::Temp;
 use LWP::UserAgent;
 use String::ShellQuote qw(shell_quote);
-use File::Basename qw(dirname);
-use JSON qw(decode_json);
-use IO::Handle;	
-use JSON;
+use CGI::Carp qw(fatalsToBrowser);
+use JSON qw(decode_json encode_json);
+use Net::MQTT::Simple;
+use CGI qw(param);
 use warnings;
-#use strict;
-#no  strict "refs"; # we need it for template system
+use strict;
+no  strict "refs";
 
 ##########################################################################
 # Variables
@@ -91,14 +85,13 @@ our $Text2SIP_USE;
 our $req;
 our $DEBUG_USE  = "off";
 our $PLUGIN_USE = "off";
+our $languagefile = "language.dat";
 #*********************** Added by OL *************************************
 our $T2S_INSTALLED = "false";
 our $T2S_USE = "off";
 our $ttsfile;
 our $T2S_IP;
-my $ffmpeg = '/usr/bin/ffmpeg';
-my $mpg123   = '/usr/bin/mpg123';
-our $lame = "/usr/bin/lame";
+our $ffmpeg = '/usr/bin/ffmpeg';
 our $T2SPlugFolder = 'Text-2-Speech';
 our $T2SminVers = '1.2.1';
 our $P2W_Text;
@@ -106,6 +99,10 @@ our $P2W_lang;
 our $tts_ip = '192.168.50.171';
 our $full_path_to_mp3;
 our $mp3tmp;
+my $req_topic  = 'tts-publish';
+my $resp_topic = 'tts-subscribe';
+my $mqtt_user;
+my $mqtt_pass;
 #*************************************************************************
 our $res;
 our $wgetbin    = "wget";
@@ -116,6 +113,9 @@ our $wgetbin    = "wget";
 
 # Version of this script
   $version = "v2025.09.09";
+  
+# read language
+#my $lblang = lblanguage();
 
 my $logfile 					= "Text2SIP.log";
 our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/". $logfile, append => 1 );
@@ -179,7 +179,7 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
     $pluginwavfile    = get_temp_filename('_wav');
     $plugintmpfile    = get_temp_filename('.tmp.wav');
     
-    $sox              = "/usr/bin/sox";
+    #$sox              = "/usr/bin/sox";
     $sipcmd           = $pluginbindir."/sipcmd";
     $plugin_cfg       = new Config::Simple("$pluginconfigfile");
 
@@ -204,15 +204,18 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
   $lang         =~ tr/a-z//cd;
   $lang         = substr($lang,0,2);
   # If there's no language phrases file for choosed language, use english as default
-  if (!-e "$installfolder/templates/plugins/$psubfolder/$lang/language.dat")
+  if (!-e "$installfolder/templates/plugins/$psubfolder/lang/language_$lang.dat")
   {
     $lang = "en";
   }
 
 # Read translations / phrases
   $languagefile       = "$installfolder/templates/system/$lang/language.dat";
+  if (! -f $languagefile) {
+	  $languagefile = "$installfolder/templates/system/en/language.dat";
+  }
   $phrase             = new Config::Simple($languagefile);
-  $languagefileplugin = "$installfolder/templates/plugins/$psubfolder/$lang/language.dat";
+  $languagefileplugin = "$installfolder/templates/plugins/$psubfolder/lang/language_$lang.dat";
   $phraseplugin       = new Config::Simple($languagefileplugin);
   foreach my $key (keys %{ $phraseplugin->vars() } )
   {
@@ -238,9 +241,6 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
 	  }
 	#************************************ End of added by OL ************************************
 	  
-	
-
-
 ##########################################################################
 # Main program
 ##########################################################################
@@ -338,8 +338,8 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
 	}
 	#************************* End of added by OL ***********************************
 	    
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
-    system ("echo '".$cmd."' >> $pluginjobfile");
+    #if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir"."/"."$logfile"); }
+    #system ("echo '".$cmd."' >> $pluginjobfile");
 
     $cmd = 'echo "'.localtime(time).' ## Calling '.$SIPCMD_CALLED_USER.'" 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
@@ -652,7 +652,7 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
             	$SIPCMD_CONFIRMATION_DIGIT = "-";
             };
 
-            open(F,"$installfolder/templates/plugins/$psubfolder/$lang/giude_row.html") || die "Missing template /plugins/$psubfolder/$lang/giude_row.html";
+            open(F,"$installfolder/templates/plugins/$psubfolder/giude_row.html") || die "Missing template /plugins/$psubfolder/giude_row.html";
             while (<F>)
             {
                $_ =~ s/<!--\$(.*?)-->/${$1}/g;
@@ -662,10 +662,9 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
           }
         }
       }
-	  &get_mqtt_details;
 	  
       # Parse the strings we want
-      open(F,"$installfolder/templates/plugins/$psubfolder/$lang/settings.html") || die "Missing template plugins/$psubfolder/$lang/settings.html";
+      open(F,"$installfolder/templates/plugins/$psubfolder/settings.html") || die "Missing template plugins/$psubfolder/settings.html";
       while (<F>)
       {
         if ( $_ ne "" )
@@ -692,7 +691,7 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
     $template_title = $phrase->param("TXT0000") . " - " . $phrase->param("TXT0028");
 
     &lbheader;
-    open(F,"$installfolder/templates/system/$lang/error.html") || die "Missing template system/$lang/error.html";
+    open(F,"$installfolder/templates/system/error.html") || die "Missing template system/error.html";
     while (<F>)
     {
       $_ =~ s/<!--\$(.*?)-->/${$1}/g;
@@ -705,99 +704,225 @@ our $log 						= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir
   
   
 ##########################################################################
-# Creating voice by T2S Plugin POST (Interface)
+# Voice handler (TTS Plugin vs. Local)
 ##########################################################################
 
-sub t2svoice
-	{
-	use LWP::UserAgent;
-	use HTTP::Request;
-	use JSON::PP 'encode_json';
-	
-	my $tts_ip;
-	
-	# Getting text from config	
-	my $guide                           = int($query{'vg'});
-    if ( $guide == 0 )
-    {
-		print ( $phraseplugin->param('TXT_JOB_QUEUED_INVALID_VGID') );
-		print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
-		exit;
-    }
-    $P2W_Text = "".param('P2W_Text'.$guide);
-	
-	if ($T2S_INSTALLED eq "true")   {
-		#$tts_ip = 'localhost';
-	}
-	
-	# todo: change ip if locally installed or not
-	my $ua  = LWP::UserAgent->new(timeout => 30);
-	my $url = 'http://192.168.50.171/plugins/text2speech/bin/mqtt_publish.php';
-	
-	#$cmd = 'echo "'.localtime(time).' ## Sending POST Request to T2S Plugin" 2>&1 >>'.$lbplogdir."/".$logfile;
-	#system ("echo '".$cmd."' >> $pluginjobfile");
+sub t2svoice 
+{
+    our ($phraseplugin, $plugin_cfg, $lbplogdir);
+    our (%query);
 
-	my $resp = $ua->post($url, 
-	  'Content-Type' => 'application/json',
-	  Content => encode_json({
-		topic   => 'tts-publish',
-		payload => { text=>$P2W_Text, nocache=>0, logging=>1, mp3files=>0 },
-		retain  => 0,
-		user    => 'Loxberry',
-		pass    => 'MIFhegVK0HMPWIuj',
-	  }),
-	);
-	die "HTTP-Fehler: ".$resp->status_line unless $resp->is_success;
+    my $REQ_TOPIC    = 'tts-publish';
+    my $RESP_TOPIC   = 'tts-subscribe';
+    my $HTTP_PATH    = '/plugins/text2speech/bin/mqtt_publish.php';
+    my $HTTP_TIMEOUT = 30;
+    my $MQTT_WAIT_S  = 10;
 
-	my $data = eval { decode_json($resp->decoded_content) }
-	  or die "JSON-Fehler: $@";
+    my $log = sub {
+        if (open my $fh, '>>', "$lbplogdir/$logfile") {
+            print $fh scalar(localtime), " $_[0]\n";
+            close $fh;
+        }
+    };
 
-	# Manche Antworten haben die Nutzlast unter {response}, andere top-level:
-	my $r = $data->{response} // $data;
+    my $join_url = sub {
+        my ($base, $file) = @_;
+        return '' unless $base && $file;
+        $base =~ s{/$}{};
+        return "$base/$file";
+    };
 
-	my $filename       = $r->{file} // '';
-	my $httpinterface  = $r->{httpinterface}  // '';       # z.B. .../interfacedownload
+    my $parse_t2s_json = sub {
+        my ($raw) = @_;
+        my $data = eval { decode_json($raw) };
+        return (undef, "JSON parse error: $@") if $@;
+        my $r = $data->{response} // $data;
+        return ({ file => ($r->{file}//''), httpinterface => ($r->{httpinterface}//'') }, undef);
+    };
 
-	# kleine Helfer zum sauberen Zusammenfügen
-	sub join_url {
-	  my ($base, $file) = @_;
-	  return '' unless $base && $file;
-	  $base =~ s{/$}{};
-	  return "$base/$file";
-	}
-	
-	# WICHTIG: global setzen, nicht "my", damit usetts es sieht
-	$full_path_to_mp3 = join_url($httpinterface, $filename);
+    # ---- NEU: JSON-Credentials laden ----
+    my $load_remote_creds_from_json = sub {
+        my $f = '/opt/loxberry/config/plugins/text2sip/remote_mqtt_config.json';
+        return ({}, "no json file") unless -r $f;
+        my $raw = do { local $/; open my $fh, '<', $f or return ({}, "open failed"); <$fh> };
+        my $j = eval { decode_json($raw) };
+        return ({}, "json parse error: $@") if $@;
 
-	#print "Filename:        $filename\n";
-	#print "HTTP interface:  $httpinterface\n";
-	#print "HTTP mp3:        $httpmp3\n";
-	#print "URL (Fullpath): $full_path_to_mp3\n";
-	#print "URL (mp3store):  $download_from_mp3store\n";
-	
-	# Sanity-Check: wenn kein Pfad, auf Pico zurückfallen
-    unless ($full_path_to_mp3) {
-        $cmd = 'echo "'.localtime(time).' ## Kein MP3-Pfad aus T2S erhalten – fallback auf Pico" 2>&1 >>'.$lbplogdir."/".$logfile;
-        system ("echo '".$cmd."' >> $pluginjobfile");
-        &usepico;
+        # erwartete Felder (tolerant, optional)
+        my %out = (
+            host         => $j->{brokerhost} // $j->{host} // '',
+            port         => $j->{brokerport} // $j->{port} // 1883,
+            user         => $j->{brokeruser} // $j->{user} // '',
+            pass         => $j->{brokerpass} // $j->{pass} // '',
+            req_topic    => $j->{req_topic}    // $REQ_TOPIC,
+            resp_topic   => $j->{resp_topic}   // $RESP_TOPIC,
+            http_path    => $j->{http_path}    // $HTTP_PATH,
+            http_timeout => $j->{http_timeout} // $HTTP_TIMEOUT,
+        );
+        return (\%out, undef);
+    };
+
+    # ---- Eingaben prüfen ----
+    my $guide = int($query{'vg'} // param('vg') // 0);
+    if ($guide == 0) {
+        print $phraseplugin->param('TXT_JOB_QUEUED_INVALID_VGID'), "\n";
+        print "\n<script>\$('#call_result$guide').removeClass('test2sip_job_ok').addClass('test2sip_job_failed');</script>\n";
+        $log->("## ERROR: Invalid vg/guide=0");
+        eval { &usepico(); };
         return;
     }
-	
-	# Debug nur ins Log, NICHT aufs STDOUT
-    
-    system($logline);
-    if (!$resp->is_success) {
-         $cmd = 'echo "'.localtime(time).' ## HTTP POST error code: '.$resp->code.'" 2>&1 >>'.$lbplogdir."/".$logfile;
-         system ("echo '".$cmd."' >> $pluginjobfile");
-         $cmd = 'echo "'.localtime(time).' ## HTTP POST error message: '.$resp->message.'" 2>&1 >>'.$lbplogdir."/".$logfile;
-         system ("echo '".$cmd."' >> $pluginjobfile");
-         &usepico;
+
+    our $P2W_Text = ''.(param('P2W_Text'.$guide) // '');
+    $P2W_Text =~ s/\R//g;
+    if ($P2W_Text eq '') {
+        $log->("## ERROR: Empty TTS-Text");
+        eval { &usepico(); };
+        return;
     }
-	$cmd = 'echo "'.localtime(time).' ## Sending POST Request to T2S Plugin completed" 2>&1 >>'.$lbplogdir."/".$logfile;
-	system ("echo '".$cmd."' >> $pluginjobfile");
-	&usetts;
-	return;
+
+    our $P2W_lang = $P2W_lang // 'de-DE';
+    my $T2S_IP = eval { $plugin_cfg->param('default.T2S_IP') } // '';
+
+    # ---- JSON-Creds laden (für HTTP und/oder MQTT) ----
+    my ($cred, $cerr) = $load_remote_creds_from_json->();
+    $cred ||= {};
+    my $req_topic    = $cred->{req_topic}    || $REQ_TOPIC;
+    my $resp_topic   = $cred->{resp_topic}   || $RESP_TOPIC;
+    my $http_path    = $cred->{http_path}    || $HTTP_PATH;
+    my $http_timeout = $cred->{http_timeout} || $HTTP_TIMEOUT;
+
+    # ===== Pfad A: Remote per HTTP, wenn T2S_IP gesetzt (nicht localhost) =====
+    if ($T2S_IP ne '' && $T2S_IP !~ /^(127\.0\.0\.1|localhost)$/i) {
+        my $url      = "http://$T2S_IP$http_path";
+        my $safe_url = mask_secrets($url);
+        $log->("## T2S via HTTP: $safe_url (text_len=".length($P2W_Text).")");
+
+        my $ua = LWP::UserAgent->new(timeout => $http_timeout, keep_alive => 1);
+        my $resp = $ua->post(
+            $url,
+            'Content-Type' => 'application/json',
+            Content => encode_json({
+                topic   => $req_topic,
+                payload => { text=>$P2W_Text, nocache=>0, logging=>1, mp3files=>0 },
+                retain  => 0,
+                user    => ($cred->{user} // ''),
+                pass    => ($cred->{pass} // ''),
+            }),
+        );
+
+        my $body = $resp->decoded_content // '';
+        $log->("## HTTP $safe_url -> status=".$resp->code." len=".length($body));
+
+        unless ($resp->is_success) {
+            my $snippet = substr($body, 0, 400); $snippet =~ s/\R/ /g;
+            $snippet = mask_secrets($snippet);
+            $log->("## ERROR: HTTP ".$resp->status_line." body(snippet): $snippet – fallback to Pico");
+            eval { &usepico(); };
+            return;
+        }
+
+        # JSON jetzt aus dem bereits gelesenen $body parsen
+        my ($parsed, $perr) = $parse_t2s_json->($body);
+        if ($perr) {
+            my $snippet = substr($body, 0, 400); $snippet =~ s/\R/ /g;
+            $snippet = mask_secrets($snippet);
+            $log->("## ERROR: $perr body(snippet): $snippet – fallback to Pico");
+            eval { &usepico(); };
+            return;
+        }
+
+        our $full_path_to_mp3 = $join_url->($parsed->{httpinterface}, $parsed->{file});
+        if ($full_path_to_mp3) {
+            my $safe_mp3 = mask_secrets($full_path_to_mp3);
+            $log->("## T2S HTTP OK: $safe_mp3");
+            eval { &usetts(); };
+            return;
+        }
+        $log->("## ERROR: T2S HTTP failed – fallback to Pico");
+        eval { &usepico(); };
+        return;
+    }
+
+    # ===== Pfad B: Lokal via MQTT =====
+    $log->("## T2S via MQTT (local) (text_len=".length($P2W_Text).")");
+
+    # Falls keine JSON-Creds vorhanden sind, nutze LoxBerry-Defaults
+    my ($host, $port, $user, $pass) = do {
+        if ($cred->{host}) {
+            ($cred->{host}, $cred->{port} // 1883, $cred->{user}//'', $cred->{pass}//'')
+        } else {
+            my $mqttcred = LoxBerry::IO::mqtt_connectiondetails();
+            (
+                $mqttcred->{brokerhost} // '127.0.0.1',
+                $mqttcred->{brokerport} // 1883,
+                $mqttcred->{brokeruser} // '',
+                $mqttcred->{brokerpass} // ''
+            )
+        }
+    };
+
+    # Connect-Info mit maskierten Secrets
+    $log->("## MQTT connect to $host:$port user=".($user//'').' pass=***');
+
+    $ENV{MQTT_SIMPLE_ALLOW_INSECURE_LOGIN} = 1;
+
+    my $mqtt;
+    eval {
+        $mqtt = Net::MQTT::Simple->new("$host:$port");
+        $mqtt->login($user, $pass) if length($user) || length($pass);
+        1;
+    } or do {
+        $log->("## ERROR: MQTT connect/login failed ($host:$port, user=".($user//'').") – fallback to Pico");
+        eval { &usepico(); };
+        return;
+    };
+
+    my ($reply, $raw_msg);
+    $mqtt->subscribe($resp_topic => sub {
+        my ($t, $msg) = @_;
+        $raw_msg //= $msg;
+        my ($parsed, $perr) = $parse_t2s_json->($msg);
+        return if $perr;
+        $reply = $parsed if $parsed->{file} && $parsed->{httpinterface};
+    });
+
+    $mqtt->publish($req_topic, encode_json({
+        text     => $P2W_Text,
+        nocache  => 0,
+        logging  => 1,
+        mp3files => 0,
+    }));
+
+    my $deadline = time + $MQTT_WAIT_S;
+    while (!defined $reply && time < $deadline) {
+        $mqtt->tick();
+        select undef, undef, undef, 0.1;
+    }
+    $mqtt->disconnect();
+
+    if ($raw_msg && !$reply) {
+        my $dump = substr($raw_msg, 0, 800); $dump =~ s/\R/ /g;
+        $dump = mask_secrets($dump);
+        $log->("## MQTT raw response (masked, first 800): $dump");
+    }
+
+    our $full_path_to_mp3 = '';
+    if ($reply && $reply->{httpinterface} && $reply->{file}) {
+        $full_path_to_mp3 = $join_url->($reply->{httpinterface}, $reply->{file});
+        if ($full_path_to_mp3) {
+            my $safe_mp3 = mask_secrets($full_path_to_mp3);
+            $log->("## T2S MQTT OK: $safe_mp3");
+            eval { &usetts(); };
+            return;
+        }
+    }
+
+    $log->("## WARNING: T2S MQTT no response/URL – fallback to Pico");
+    eval { &usepico(); };
+    return;
 }
+
+
 
 ##########################################################################
 # Small helper
@@ -815,17 +940,25 @@ sub job_log_end {
 
 sub usepico
 {
+	my $sz_inB;
+	my $sz_wavB;
+	my $sz_rawB;
     # --- Log-Helpers ---
     my $log = sub {
         open my $fh, '>>', "$lbplogdir/$logfile";
         print $fh scalar(localtime), " $_[0]\n";
         close $fh;
     };
+	
     my $job = sub {
-        open my $pfh, '>>', $pluginjobfile;
-        print $pfh scalar(localtime), " $_[0]\n";
-        close $pfh;
-    };
+		my ($msg) = @_;
+		my $ts   = scalar localtime;
+		my $line = "$ts $msg";                 # finaler Logtext (eine Zeile)
+		open my $pfh, '>>', $pluginjobfile or return;
+		print $pfh 'echo ', shell_quote($line), ' >> ',
+				   shell_quote("$lbplogdir/$logfile"), "\n";
+		close $pfh;
+	};
 
     # --- Binaries prüfen ---
     my $ff  = $ffmpeg    || '/usr/bin/ffmpeg';
@@ -834,7 +967,7 @@ sub usepico
     if (!-x $ff ) { $log->("## ERROR: ffmpeg not executable: $ff");   return; }
 
     # --- Rahmen-Infos loggen ---
-    my $pre_ms = 250;                         # Vorlaufstille
+    my $pre_ms = 100;                         # Vorlaufstille
     my $af     = "adelay=${pre_ms}|${pre_ms},volume=0.9";
     $log->("## usepico start lang=$P2W_lang pre_silence=${pre_ms}ms ffmpeg=$ff pico2wave=$p2w");
     $log->("## target base=$pluginwavfile tmp=$plugintmpfile");
@@ -934,10 +1067,14 @@ sub usetts
         close $fh;
     };
     my $job = sub {
-        open my $pfh, '>>', $pluginjobfile;
-        print $pfh scalar(localtime), " $_[0]\n";
-        close $pfh;
-    };
+		my ($msg) = @_;
+		my $ts   = scalar localtime;
+		my $line = "$ts $msg";                 # finaler Logtext (eine Zeile)
+		open my $pfh, '>>', $pluginjobfile or return;
+		print $pfh 'echo ', shell_quote($line), ' >> ',
+				   shell_quote("$lbplogdir/$logfile"), "\n";
+		close $pfh;
+	};
 
     $job->("## Generating voice by T2S Plugin");
     $log->("## Generating voice by T2S Plugin");
@@ -954,7 +1091,8 @@ sub usetts
         $log->("## ERROR: full_path_to_mp3 leer – fallback auf Pico");
         &usepico; return;
     }
-    $log->("## MP3 URL: $full_path_to_mp3");
+    my $safe_mp3_url = mask_secrets($full_path_to_mp3);
+    $log->("## MP3 URL: $safe_mp3_url");
 
     # --- Schritt 1: MP3 lokal herunterladen ---
     $mp3tmp = $plugintmpfile;  $mp3tmp =~ s/\.wav$/.mp3/;
@@ -978,8 +1116,9 @@ sub usetts
         &usepico; return;
     }
 
-    # Optional: Download-Kommando nur bei Debug loggen (ohne UI-Spam)
-    $job->("Download: $dl_cmd") if (($DEBUG_USE||'') eq 'on');
+    # >>> Maskiertes Download-Kommando ins Jobfile
+    my $log_dl_cmd = mask_secrets($dl_cmd);
+    $job->("## Download: $log_dl_cmd");
 
     my $rc_dl = system($dl_cmd);
     my $sz_mp3 = (-e $mp3tmp) ? -s $mp3tmp : 0;
@@ -996,11 +1135,14 @@ sub usetts
         '%s -hide_banner -loglevel error -y -i %s -filter:a %s -ac 1 -ar 8000 -acodec pcm_s16le -f wav %s 2>> %s',
         shell_quote($ff),
         shell_quote($mp3tmp),
-        shell_quote('volume=0.9'),                # (optional: adelay=250|250,volume=0.9)
+        shell_quote('volume=0.9'),
         shell_quote($pluginwavfile),
         shell_quote("$lbplogdir/$logfile")
     );
-    $job->("ffmpeg: $ff_cmd") if (($DEBUG_USE||'') eq 'on');
+
+    # >>> Maskiertes ffmpeg-Kommando ins Jobfile
+    my $log_ff_cmd = mask_secrets($ff_cmd);
+    $job->("## ffmpeg: $log_ff_cmd");
 
     my $rc = system($ff_cmd);
     my $exit = $rc >> 8;
@@ -1013,7 +1155,7 @@ sub usetts
     if ($rc == 0 && $sz_wav > 0) {
         $log->('## ffmpeg ok '.$pluginwavfile.' size='.$sz_wav.'B dur='.$dur_wav.'s');
     } else {
-        $log->('## ffmpeg failed (rc='.$rc.' exit='.$exit.') cmd='.$ff_cmd);
+        $log->('## ffmpeg failed (rc='.$rc.' exit='.$exit.') cmd='.$log_ff_cmd);
         &usepico;  # Fallback
         job_log_end();
         return;
@@ -1025,91 +1167,79 @@ sub usetts
 }
 
 
-##########################################################################
-# Get Remote MQTT Configuration
-##########################################################################
+#####################################################
+# Secret masking 
+#####################################################
 
-sub get_mqtt_details {
-	
-	#use LWP::UserAgent;
-	#use JSON qw(decode_json);
-	#use IO::Handle;	
-	
-    my ($lbplogdir, $logfile, $T2S_IP) = @_;
+sub mask_secrets {
+    my ($s) = @_;
+    return $s unless defined $s;
 
-    return unless defined $T2S_IP && $T2S_IP ne '';
+    # JSON- / Key-Value-ähnliche Muster
+    $s =~ s/("?(?:api[-_ ]?key|key|token|pass(?:word)?|secret|authorization)"?\s*[:=]\s*")([^"]+)(")/$1***$3/ig;
+    $s =~ s/([?&](?:api[-_ ]?key|key|token|pass(?:word)?|secret)=)[^&]*/$1***/ig;
+    $s =~ s/(\bBearer\s+)[A-Za-z0-9\.\-_]+/$1***/ig;
 
-    # http:// voranstellen wenn nötig
-    my $base = $T2S_IP =~ m{^https?://}i ? $T2S_IP : "http://$T2S_IP";
-    my $url  = "$base/plugins/text2speech/bin/mqtt_publish.php?config=1";
+    # Basic-Auth in URL (user:pass@host)
+    $s =~ s{(https?://[^:\s/]+:)[^@\s/]+(@)}{$1***$2}ig;
 
-    my $ua = LWP::UserAgent->new(timeout => 30);
-    my $res = $ua->get($url);
-
-    my $logpath = "$lbplogdir/$logfile";
-    open my $LF, '>>', $logpath or die "Kann $logpath nicht öffnen: $!";
-    $LF->autoflush(1);
-
-    unless ($res->is_success) {
-        print $LF scalar(localtime) . " ## HTTP-Error: " . $res->status_line . "\n";
-        my $body = $res->decoded_content // '';
-        $body =~ s/\s+/ /g;
-        print $LF scalar(localtime) . " ## Body: $body\n" if $body ne '';
-        close $LF;
-        die "HTTP Error: " . $res->status_line;
-    }
-
-    my $data;
-    eval { $data = decode_json($res->decoded_content) };
-    if ($@ || ref($data) ne 'HASH') {
-        print $LF scalar(localtime) . " ## JSON-Decode-Error: $@\n";
-        close $LF;
-        die "Invalid JSON-Response";
-    }
-
-    if ($data->{ok}) {
-        my $cfg = $data->{data}{config} || {};
-        printf $LF "%s ## Broker: %s\n", scalar(localtime), ($cfg->{host} // '');
-        printf $LF "%s ## Port:   %s\n", scalar(localtime), ($cfg->{port} // '');
-        printf $LF "%s ## User:   %s\n", scalar(localtime), ($cfg->{user} // '');
-    } else {
-        printf $LF "%s #### Error: %s\n", scalar(localtime), ($data->{error} // 'unbekannt');
-    }
-    close $LF;
-    return;
+    return $s;
 }
 
+sub mask_hash {
+    my ($h) = @_;
+    return {} unless $h && ref $h eq 'HASH';
+    my %c = %{$h};
+    for my $k (keys %c) {
+        if ($k =~ /pass|key|token|secret|authorization/i) {
+            $c{$k} = '***';
+        }
+    }
+    return \%c;
+}
 
 
 #####################################################
 # Page-Header-Sub
 #####################################################
 
-  sub lbheader
-  {
-     # Create Help page
-    open(F,"$installfolder/templates/plugins/$psubfolder/$lang/help.html") || die "Missing template plugins/$psubfolder/$lang/help.html";
-      while (<F>)
-      {
-         $_ =~ s/<!--\$(.*?)-->/${$1}/g;
-         $helptext = $helptext . $_;
-      }
+sub lbheader {
+    my $helpfile = "$installfolder/templates/plugins/$psubfolder/help.html";
+    open(my $F, "<", $helpfile) or die "Missing template $helpfile";
+    while (<$F>) {
+        $_ =~ s/<!--\$(.*?)-->/${$1}/g;
+        $helptext .= $_;
+    }
+    close($F);
 
-    close(F);
-    open(F,"$installfolder/templates/system/$lang/header.html") || die "Missing template system/$lang/header.html";
-      while (<F>)
-      {
+    my $headerfile = "$installfolder/templates/system/$lang/header.html";
+    if (! -f $headerfile) {
+        $headerfile = "$installfolder/templates/system/en/header.html";
+    }
+
+    open($F, "<", $headerfile) or die "Missing template system/en/header.html";
+    while (<$F>) {
         $_ =~ s/<!--\$(.*?)-->/${$1}/g;
         print $_;
-      }
-    close(F);
-  }
+    }
+    close($F);
+}
   
  
 #####################################################
 # Footer
 #####################################################
 
-  sub footer { open(F,"$installfolder/templates/system/$lang/footer.html") || 
-  die "Missing template system/$lang/footer.html"; while (<F>) { $_ =~ s/<!--
-  \$(.*?)-->/${$1}/g; print $_; } close(F); }
+sub footer {
+    my $footerfile = "$installfolder/templates/system/$lang/footer.html";
+    if (! -f $footerfile) {
+        $footerfile = "$installfolder/templates/system/en/footer.html";
+    }
+
+    open(my $F, "<", $footerfile) or die "Missing template system/en/footer.html";
+    while (<$F>) {
+        $_ =~ s/<!--\$(.*?)-->/${$1}/g;
+        print $_;
+    }
+    close($F);
+}

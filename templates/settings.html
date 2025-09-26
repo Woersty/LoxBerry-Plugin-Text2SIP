@@ -1,0 +1,563 @@
+		<style>
+			/* ===============================
+			   Gesamter Block
+			   =============================== */
+			.plugin-config-box {
+			  width: 480px;            /* Gesamtbreite des Blocks */
+			  max-width: 100%;
+			  box-sizing: border-box;
+			}
+
+			.plugin-config-table {
+			  width: 100%;
+			  border-collapse: collapse;      /* keine Zellzwischenräume */
+			  table-layout: auto;             /* auto reicht hier; fixed nur bei harten Breiten nötig */
+			}
+
+			/* Alle Zellen: Standard-Padding neutralisieren */
+			.plugin-config-box td {
+			  padding: 0;                      /* wichtig: Theme-Padding entfernen */
+			}
+
+			/* ===============================
+			   Tabellenlayout
+			   =============================== */
+
+			/* Linke Spalte (Labels) */
+			.plugin-config-box td.label {
+			  width: 120px;                    /* steuert, wie weit der Switch rechts sitzt */
+			  vertical-align: middle;
+			  font-weight: normal;
+			  font-size: 0.9em;
+			  white-space: nowrap;             /* Label einzeilig */
+			  line-height: 1.3em;
+			  color: #333;
+			  padding-right: 5px;              /* HIER: nur 5px Abstand zum Switch */
+			}
+
+			/* Rechte Spalte (Switches/Controls) */
+			.plugin-config-box td.control {
+			  vertical-align: middle;
+			  padding-left: 0;                 /* kein zusätzlicher Abstand von rechts */
+			}
+
+			/* ===============================
+			   Flipswitch / Slider (jQuery Mobile)
+			   =============================== */
+
+			/* jQM gibt oft einen linken Außenabstand – entfernen */
+			.plugin-config-box .ui-flipswitch,
+			.plugin-config-box .ui-slider,
+			.plugin-config-box select[data-role="slider"] {
+			  max-width: 140px;
+			  margin-left: 0 !important;       /* näher ans Label */
+			}
+
+			/* ===============================
+			   Link-Zeile unter dem Switch
+			   =============================== */
+			.plugin-config-box .t2s-link-cell {
+			  padding-top: 4px;
+			  padding-left: 0;                  /* bündig mit Switch */
+			}
+			.plugin-config-box .t2s-link {
+			  white-space: nowrap;
+			  font-size: 0.9em;
+			}
+
+			/* ===============================
+			   IP-Label + Feld
+			   =============================== */
+			.plugin-config-box .ip-label {
+			  font-weight: normal;
+			  font-size: 0.8em;
+			  line-height: 1.4em;
+			  padding: 6px 0 4px 0;
+			  color: #333;
+			  white-space: normal;
+			}
+
+			.plugin-config-box .ip-field { text-align: left; }
+
+			/* Wrapper bestimmt die tatsächliche Eingabefeld-Breite */
+			.plugin-config-box .ip-field-inner {
+			  display: inline-block;
+			  width: 260px;                    /* Feldbreite hier einstellen */
+			}
+			.plugin-config-box .ip-field-inner input#T2S_IP {
+			  width: 100%;
+			  padding: 6px;
+			  font-size: 0.9em;
+			  box-sizing: border-box;
+			}
+
+			/* ===============================
+			   Optional: responsiv
+			   =============================== */
+			@media (max-width: 640px) {
+			  .plugin-config-box { width: 100%; max-width: none; }
+			  .plugin-config-box td.label { width: 55%; }
+			}
+		</style>
+				  
+				  <div id="dialog"></div>
+                  <script type="text/javascript" src="/plugins/<!--$psubfolder-->/jquery-ui-1.9.2.custom.min.js"></script>
+                  <script type="text/javascript" src="/plugins/<!--$psubfolder-->/countrySelect.min.js"></script>
+                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css">
+                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/countrySelect.min.css">
+                  <center>
+                    <form autocomplete="off" method="post" data-ajax="false" name="main_form" id="main_form" action="./index.cgi">
+                    <table width="100%" style="background: rgba(255,255,192, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
+                      <tr>
+                        <td width="200px" valign="top">
+						<!-- **************************************** Added/changed by OL ************************************ -->
+						<div class="plugin-config-box">
+						  <table class="plugin-config-table">
+							<!-- Plugin aktiv -->
+							<tr>
+							  <td class="label"><!--$TXT_LABEL_PLUGIN_USE--></td>
+							  <td class="control">
+								<select name="PLUGIN_USE" id="PLUGIN_USE"
+										data-mini="true" data-track-theme="e" data-role="slider">
+								  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+								  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+								</select>
+							  </td>
+							</tr>
+							<tr>
+							  <td class="label"><!--$TXT_LABEL_T2S_USE--></td>
+							  <td class="control">
+								<select name="T2S_USE" id="T2S_USE" data-mini="true" data-track-theme="e" data-role="slider">
+								  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+								  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+								</select>
+								<input type="hidden" id="T2S_INSTALLED" name="T2S_INSTALLED" value="<!--$T2S_INSTALLED-->">
+							  </td>
+							</tr>
+
+							<!-- Link in eigener Zeile -->
+							<tr id="t2s-link-row" style="display:none;">
+							  <td colspan="2" class="t2s-link-cell">
+								<a href="../text2speech/index.cgi" target="_blank" class="t2s-link"><!--$TXT_LABEL_T2S--></a>
+							  </td>
+							</tr>
+
+							<!-- IP-Adresse und label -->
+							<tr id="t2s-ip-label-row" style="display:none;">
+							  <td colspan="2" class="ip-label"><!--$TXT_LABEL_IP--></td>
+							</tr>
+							<tr id="t2s-ip-field-row" style="display:none;">
+							  <td colspan="2" class="ip-field">
+								<div class="ip-field-inner">
+									<div class="ip-field-inner" style="display:flex; align-items:center; gap:10px;">
+									  <input type="text" name="T2S_IP" id="T2S_IP" placeholder="<!--$TXT_LABEL_T2S_IP-->">
+									  <a id="t2s-ext-link" href="#" target="_blank" rel="noopener" class="t2s-link" style="display:none;">
+										<!--$TXT_LABEL_T2S_USE_EXT-->
+									  </a>
+									</div>
+								</div>
+							  </td>
+							</tr>
+						</table>
+							</div>
+							<script>
+						  $(function(){
+							$('#PLUGIN_USE').val("<!--$PLUGIN_USE-->"); 
+							try { $('#PLUGIN_USE').slider('refresh'); } catch(e){}
+							$('#T2S_USE').val("<!--$T2S_USE-->"); 
+							try { $('#T2S_USE').slider('refresh'); } catch(e){}
+							$('#T2S_IP').val("<!--$T2S_IP-->");
+							// T2S-Bereich initial anzeigen/verstecken
+							toggleT2S();
+						  });
+						  
+						  var T2S_IP_SAVED = "<!--$T2S_IP-->";
+
+							  function makeExtUrl(ip) {
+								var base = (ip || "").trim();
+								if (!base) return null;
+								if (!/^https?:\/\//i.test(base)) base = "http://" + base;
+								base = base.replace(/\/+$/,""); // trailing slashes weg
+								return base + "/admin/plugins/text2speech/";
+							  }
+
+							  function updateExternalLink() {
+								var current = $("#T2S_IP").val().trim();
+								var installed = $("#T2S_INSTALLED").val();
+								var t2sUse = $("#T2S_USE").val();
+
+								// Link nur zeigen, wenn:
+								// - T2S aktiv
+								// - T2S nicht lokal installiert (IP-Feld sichtbar)
+								// - eine gespeicherte IP existiert
+								// - Feldwert == gespeicherte IP (d. h. unverändert)
+								if (t2sUse === "on" &&
+									installed !== "true" &&
+									T2S_IP_SAVED &&
+									current === T2S_IP_SAVED) {
+								  var url = makeExtUrl(current);
+								  if (url) {
+									$("#t2s-ext-link").attr("href", url).show();
+									return;
+								  }
+								}
+								$("#t2s-ext-link").hide().attr("href", "#");
+							  }
+
+														function toggleT2S() {
+							  var installed = $("#T2S_INSTALLED").val();
+							  var t2sUse    = $("#T2S_USE").val();
+							  var ipField   = $("#T2S_IP");
+
+							  if (t2sUse === "on") {
+								if (installed === "true") {
+								  $("#t2s-link-row").show();
+								  $("#t2s-ip-label-row, #t2s-ip-field-row").hide();
+								  ipField.val(""); // IP löschen, wenn lokal installiert
+								} else {
+								  $("#t2s-link-row").hide();
+								  $("#t2s-ip-label-row, #t2s-ip-field-row").show();
+								}
+							  } else {
+								$("#t2s-link-row, #t2s-ip-label-row, #t2s-ip-field-row").hide();
+							  }
+
+							  toggleLangField(t2sUse === "on");
+							  updateExternalLink(); // <— hier neu
+							}
+
+							function toggleLangField(lock) {
+							  $("input[id^='P2W_lang']")
+								.prop("readonly", lock)
+								.closest(".ui-input-text")
+								.toggleClass("ui-disabled ui-state-disabled", lock);
+
+							  console.log("P2W_lang Field " + (lock ? "locked" : "ready for select"));
+							}
+
+							// Beim Laden initial prüfen
+							$(document).on("pagecreate ready", function() {
+							  toggleT2S();
+							});
+
+							// Umschalten vom jQM-Slider abfangen
+							$(document).on("change", "#T2S_USE", function() {
+							  toggleT2S();
+							});
+							
+							// Wenn der Nutzer die IP ändert: Link verstecken (unsaved)
+							$(document).on("input change keyup", "#T2S_IP", function () {
+								updateExternalLink();
+							});
+						</script>
+						<!-- **************************************** End of Added by OL ************************************ -->
+                        </td>
+                        <td align="center"><img src="/system/images/icons/<!--$psubfolder-->/icon_64.png"><br/><b><!--$MY_NAME--></b><br/><small><!--$PLUGIN_DESCRIPTION--></small>
+                        <table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>
+                        </td>
+                        <td width="200px">
+                          <table align="center" style="background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
+                            <tr>
+                              <td align="center"><small><nobr><b><!--$TXT_BTN_BLOCK_LOG--></b></nobr></small></td>
+                            </tr>
+                            <tr>
+                              <td align="center">
+                                <select name="DEBUG_USE" data-mini="false" id="DEBUG_USE" data-track-theme="e" data-role="slider">
+                                  <option value="off"><!--$TXT_LABEL_DEBUG_USE_OFF--></option>
+                                  <option value="on"><!--$TXT_LABEL_DEBUG_USE_ON--></option>
+                                </select>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <script type="text/javascript">$('#DEBUG_USE').val("<!--$DEBUG_USE-->");</script>
+                                <a style="width:150px;" id="btnshwlog" data-icon="info"    data-role="button" data-mini="true" target="log" href="/admin/system/tools/logfile.cgi?logfile=plugins/<!--$psubfolder-->/Text2SIP.log&header=html&format=template"><!--$TXT_BTN_SHOW_LOG--></a>
+                                <a style="width:150px;" id="btndwllog" data-icon="arrow-d" data-role="button" data-mini="true" target="_self" href="/plugins/<!--$psubfolder-->/?mode=download_logfile"><!--$TXT_BTN_DOWNLOAD_LOG--></a>
+                                <a style="width:150px;" id="btndwllog" data-icon="delete"  data-role="button" data-mini="true" target="_self" onclick="ConfirmDialog2('<br/><br/><table><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_delete.png\'></td><td><!--$TXT_EMPTY_LOG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_EMPTY_LOG_DIALOG_TITLE-->');"><!--$TXT_BTN_EMPTY_LOG--></a>
+                              </td>
+                            </tr>
+                          </table>
+                       </td>
+                      </tr>
+                    </table><br/>
+                      <input type="hidden" name="save_data" id="save_data" value="0">
+                      <input type="hidden" name="LAST_ID"   id="LAST_ID" value="<!--$LAST_ID-->">
+                      <div class="form-group">
+                        <table class="formtable" width="100%">
+                          <tr>
+                            <td>
+                              <div id="vg_div" style="cursor:default;">
+                                <fieldset id="vgs">
+                                  <SCRIPT>
+                                    vg_ids = new Array();
+                                    vg_ids.push($('#LAST_ID').val());
+                                  </SCRIPT>
+                                  <table class='formtable' id='formtable' style='width:100%; background: rgba(192,192,192, 0.2); border-radius: 5px; border: 1px solid #7e7e7e; padding: 0px'>
+                                    <tr>
+                                      <td colspan='5' align='right'>
+                                        <a style="width:400px;" id="btnscan" data-icon="plus" data-role="button" data-mini="true" onclick="var new_vg_id = Math.max.apply(Math, vg_ids) + 1; vg_ids.push(new_vg_id); $( '<tr><td>                  <div id=\'VG_ID'+new_vg_id+'\'>                                                                                                                                                \
+                                        <div id=\'wrap'+new_vg_id+'\' style=\'background: rgba(192,128,128, 0.2); border-radius: 5px; border: 1px solid #7e7e7e; padding: 10px\'>                                                                                                                                                                                                                                                 \
+                                          <table class=\'formtable\' width=\'100%\' style=\'padding-left:5px;\'>                                                                                                                                                                                                                                                                                                                  \
+                                            <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
+                                              <td colspan=\'5\' style=\'text-align:left;\'>                                                                                                                                                                                                                                                                                                                                       \
+                                                <table style=\'width:100%;\'>                                                                                                                                                                                                                                                                                                                                                     \
+                                                  <tr>                                                                                                                                                                                                                                                                                                                                                                            \
+                                                    <td>                                                                                                                                                                                                                                                                                                                                                                          \
+                                                      <nobr><b><!--$TXT_VG_ID-->'+new_vg_id+'</b></nobr>                                                                                                                                                                                                                                                                                                                          \
+                                                    </td>                                                                                                                                                                                                                                                                                                                                                                         \
+                                                    <td style=\'width:100%; text-align:right; \'>                                                                                                                                                                                                                                                                                                                                 \
+                                                      <div id=\'call_result'+new_vg_id+'\'></div>                                                                                                                                                                                                                                                                                                                                 \
+                                                    </td>                                                                                                                                                                                                                                                                                                                                                                         \
+                                                    <td colspan=\'2\' style=\'text-align:right; \'>                                                                                                                                                                                                                                                                                                                               \
+                                                      <a onclick=\'play('+new_vg_id+')\' href=\'javascript:void(0);\'><img src=\'/plugins/<!--$psubfolder-->/ico_call_now.png\' width=\'48\' height=\'48\'></a>                                                                                                                                                                                                                   \
+                                                    </td>                                                                                                                                                                                                                                                                                                                                                                         \
+                                                    <td style=\'text-align:left; \'>                                                                                                                                                                                                                                                                                                                                              \
+                                                      <a onclick=\'delete_vg('+new_vg_id+')\' href=\'javascript:void(0);\'><img src=\'/plugins/<!--$psubfolder-->/ico_delete.png\' width=\'48\' height=\'48\'></a>                                                                                                                                                                                                                \
+                                                    </td>                                                                                                                                                                                                                                                                                                                                                                         \
+                                                  </tr>                                                                                                                                                                                                                                                                                                                                                                           \
+                                                </table>                                                                                                                                                                                                                                                                                                                                                                          \
+                                              </td>                                                                                                                                                                                                                                                                                                                                                                               \
+                                            </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                            <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
+                                              <td style=\'text-align:right; \'>                                                                                                                                                                                                                                                                                                                                                   \
+                                                <nobr><!--$TXT_P2W_lang--></nobr>                                                                                                                                                                                                                                                                                                                                                 \
+                                              </td>                                                                                                                                                                                                                                                                                                                                                                               \
+                                              <td colspan=\'4\'>                                                                                                                                                                                                                                                                                                                                                                  \
+                                                <div class=\'form-item\'><input id=\'P2W_lang'+new_vg_id+'\' type=\'text\' style=\'width:430px;\' spellcheck=\'false\' autocomplete=\'off\'><label for=\'P2W_lang'+new_vg_id+'\' style=\'display:none;\'></label></div>                                                                                                                                                           \
+                                                <div class=\'form-item\' style=\'display:none;\'><input type=\'text\' id=\'P2W_lang'+new_vg_id+'_code\' name=\'P2W_lang'+new_vg_id+'\' data-countrycodeinput=\'1\' readonly=\'readonly\' placeholder=\'de\' /><label for=\'P2W_lang'+new_vg_id+'_code\'>de</label></div>                                                                                                          \
+                                              </td>                                                                                                                                                                                                                                                                                                                                                                               \
+                                            </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                            <tr><td style=\'text-align:right; \'><nobr><!--$TXT_P2W_Text-->                      </nobr></td><td colspan=\'4\' width=\'100%\'><INPUT type=\'text\' name=\'P2W_Text'+new_vg_id+'\'                       id=\'P2W_Text'+new_vg_id+'\'                        value=\'<!--$P2W_Text-->\'                  </td></tr>                                                                \
+                                            <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
+                                              <td>                                                                           </td>                                                                                                                                                                                                                                                                                                \
+                                              <td style=\'width:100px;\'><nobr><!--$TXT_SIPCMD_CALLING_USER_NAME-->     </nobr></td>                                                                                                                                                                                                                                                                                              \
+                                              <td style=\'width:50px;\' ><nobr><!--$TXT_SIPCMD_CALLING_USER_NUMBER-->   </nobr></td>                                                                                                                                                                                                                                                                                              \
+                                              <td style=\'width:150px;\'><nobr><!--$TXT_SIPCMD_CALLING_USER_PASSWORD--> </nobr></td>                                                                                                                                                                                                                                                                                              \
+                                              <td style=\'width:100px;\'><nobr><!--$TXT_SIPCMD_SIP_PROXY-->             </nobr></td>                                                                                                                                                                                                                                                                                              \
+                                            </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                            <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
+                                              <td style=\'text-align:right;\'><nobr><!--$TXT_SIPCMD_CALLING_USER_ROW-->      </nobr></td>                                                                                                                                                                                                                                                                                         \
+                                              <td style=\'width:100px;\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLING_USER_NAME'+new_vg_id+'\'       id=\'SIPCMD_CALLING_USER_NAME'+new_vg_id+'\'        value=\'<!--$SIPCMD_CALLING_USER_NAME-->\'      </td>                                                                                                                                                 \
+                                              <td style=\'width:50px;\' ><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLING_USER_NUMBER'+new_vg_id+'\'     id=\'SIPCMD_CALLING_USER_NUMBER'+new_vg_id+'\'      value=\'<!--$SIPCMD_CALLING_USER_NUMBER-->\'    </td>                                                                                                                                                 \
+                                              <td style=\'width:150px;\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLING_USER_PASSWORD'+new_vg_id+'\'   id=\'SIPCMD_CALLING_USER_PASSWORD'+new_vg_id+'\'    value=\'<!--$SIPCMD_CALLING_USER_PASSWORD-->\'  </td>                                                                                                                                                 \
+                                              <td style=\'width:100px;\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_SIP_PROXY'+new_vg_id+'\'               id=\'SIPCMD_SIP_PROXY'+new_vg_id+'\'                value=\'<!--$SIPCMD_SIP_PROXY-->\'              </td>                                                                                                                                                 \
+                                            </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                            <tr><td style=\'text-align:right; \'><nobr><!--$TXT_SIPCMD_CALLED_USER-->            </nobr></td><td colspan=\'4\' width=\'100%\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLED_USER'+new_vg_id+'\'             id=\'SIPCMD_CALLED_USER'+new_vg_id+'\'              value=\'<!--$SIPCMD_CALLED_USER-->\'                                     </td></tr>              \
+                                            <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
+                                              <td style=\'text-align:right; padding-top:30px;\'><nobr><!--$TXT_SIPCMD_TIMES--></nobr>                                                                                                                                                                                                                                                                                                              \
+                                              <td colspan=\'4\'>                                                                                                                                                                                                                                                                                                                                                                  \
+                                                <table>                                                                                                                                                                                                                                                                                                                                                                           \
+                                                  <tr>                                                                                                                                                                                                                                                                                                                                                                            \
+                                                    <td style=\'width:200px;\'><nobr> <!--$TXT_SIPCMD_CALL_PAUSE_BEFORE_GUIDE-->       &nbsp;</nobr></td>                                                                                                                                                                                                                                                                         \
+                                                    <td style=\'width:200px;\'><nobr>&nbsp;<!--$TXT_SIPCMD_CALL_PAUSE_AFTER_GUIDE-->   &nbsp;</nobr></td>                                                                                                                                                                                                                                                                         \
+                                                    <td style=\'width:200px;\'><nobr>&nbsp;<!--$TXT_SIPCMD_CALL_TIMEOUT-->                   </nobr></td>                                                                                                                                                                                                                                                                         \
+                                                    <td style=\'width:100%;\'>                                                                      </td>                                                                                                                                                                                                                                                                         \
+                                                  </tr>                                                                                                                                                                                                                                                                                                                                                                           \
+                                                  <tr>                                                                                                                                                                                                                                                                                                                                                                            \
+                                                    <td><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALL_PAUSE_BEFORE_GUIDE'+new_vg_id+'\' id=\'SIPCMD_CALL_PAUSE_BEFORE_GUIDE'+new_vg_id+'\'  value=\'<!--$SIPCMD_CALL_PAUSE_BEFORE_GUIDE-->\'</td>                                                                                                                                                                  \
+                                                    <td><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALL_PAUSE_AFTER_GUIDE'+new_vg_id+'\'  id=\'SIPCMD_CALL_PAUSE_AFTER_GUIDE'+new_vg_id+'\'   value=\'<!--$SIPCMD_CALL_PAUSE_AFTER_GUIDE-->\' </td>                                                                                                                                                                  \
+                                                    <td><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALL_TIMEOUT'+new_vg_id+'\'            id=\'SIPCMD_CALL_TIMEOUT'+new_vg_id+'\'             value=\'<!--$SIPCMD_CALL_TIMEOUT-->\'           </td>                                                                                                                                                                  \
+                                                    <td></td>                                                                                                                                                                                                                                                                                                                                                                     \
+                                                  </tr>                                                                                                                                                                                                                                                                                                                                                                           \
+                                                </table>                                                                                                                                                                                                                                                                                                                                                                          \
+                                              </td>                                                                                                                                                                                                                                                                                                                                                                               \
+                                            </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                            <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
+                                              <td style=\'text-align:right; \'><nobr><!--$TXT_SIPCMD_CALL_RESULT_VI-->         </nobr></td><td colspan=\'2\' width=\'100%\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALL_RESULT_VI'+new_vg_id+'\'         id=\'SIPCMD_CALL_RESULT_VI'+new_vg_id+'\'            value=\'http://Adminuser:Password@Miniserver:80/dev/sps/io/Text2SIP_'+new_vg_id+'/\'>              \
+                                              <td style=\'text-align:right; \'><nobr><!--$TXT_SIPCMD_CONFIRMATION_DIGIT-->     </nobr></td><td><INPUT spellcheck=\'false\' maxlength=\'1\' type=\'text\' name=\'SIPCMD_CONFIRMATION_DIGIT'+new_vg_id+'\'                  id=\'SIPCMD_CONFIRMATION_DIGIT'+new_vg_id+'\'        value=\'0\'></td>                                                                                  \
+                                            </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                            <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
+                                              <td style=\'text-align:right; \'><nobr><!--$TXT_SIPCMD_MSINFO-->                 </nobr></td><td colspan=\'2\' width=\'100%\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_MSINFO'+new_vg_id+'\'                 id=\'SIPCMD_MSINFO'+new_vg_id+'\'                    value=\'http://Adminuser:Password@miniserver:80/dev/sps/io/ObjectName/state\'></td><td colspan=\'2\'><small><!--$TXT_HLP_SIPCMD_READ_MS_STATE--></small></td>                    \
+                                            </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                          </table>                                                                                                                                                                                                                                                                                                                                                                                \
+                                      </div><br/>                                                                                                                                                                                                                                                                                                                                                                                 \
+                                    </div></td></tr>' ).appendTo($('#formtable'));
+                                            $('#main_form').trigger('create');
+                                            $('#P2W_lang'+new_vg_id).countrySelect({ onlyCountries: ['de', 'us', 'gb', 'es', 'fr', 'it'], preferredCountries: '' });
+                                            $('#P2W_lang'+new_vg_id).countrySelect('selectCountry', 'de');
+                                            $('#P2W_lang'+new_vg_id).on('keypress keyup paste input', function(event) { event.preventDefault(); });
+                                            $('#LAST_ID').val(Math.max.apply(Math, vg_ids));"><!--$TXT_CREATE_NEW_VG--></a>
+                                      </td>
+                                    </tr>
+                                   <!--$vg_select-->
+                                  </table>
+                                  <SCRIPT>
+                                    $('#LAST_ID').val(Math.max.apply(Math, vg_ids));
+                                  </SCRIPT>
+                                </fieldset>
+                              </div>
+                            </td>
+                          </tr>
+                        </table>
+						<table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        
+						<table>
+                          <tr>
+                            <td width="550px">
+                              <center>
+                                <div id="form-error-message" class="form-error-message">&nbsp;</div>
+                             </center>
+                           </td>
+                          </tr>
+                        </table>
+                      </div>
+					  </form>
+                  <script type="text/javascript">
+                    var at_least_one=0;
+                    var firstrun=1;
+                    function delete_vg(vg_id)
+                    {
+                      ConfirmDialog(vg_id,'<br/><table><tr><td><img src="/plugins/<!--$psubfolder-->/ico_delete.png"></td><td><!--$TXT_DELETE_VG--><br/><br/><center><b>#'+vg_id+'</b><br/><font face=Courier><small>\"'+$('#P2W_Text'+vg_id).val()+'\"</small></font></center></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_DELETE_VG_DIALOG_TITLE-->');
+                    }
+
+                    function ConfirmDialog(vg_id,message,title)
+                    {
+                      $('#dialog').html(message)
+                        .prop('id','dialog')
+                        .dialog(
+                        {
+                          modal: true, title: title, zIndex: 10000, autoOpen: true,
+                          width: 'auto', resizable: false,
+                          buttons:
+                          {
+                            <!--$TXT_BTN_YES-->: function ()
+                            {
+                              $('#VG_ID'+vg_id).empty();
+                              $(this).dialog("close");
+                            },
+                            <!--$TXT_BTN_NO-->: function ()
+                            {
+                              $(this).dialog("close");
+                            }
+                          },
+                          close: function (event, ui)
+                          {
+                            $(this).hide();
+                          }
+                        });
+                    };
+                    function ConfirmDialog2(message,title)
+                    {
+                        $('#dialog').html(message)
+                        .prop('id','dialog')
+                        .dialog(
+                        {
+                          modal: true, title: title, zIndex: 10000, autoOpen: true,
+                          resizable: true,
+                          width: 'auto',
+                          height: 'auto',
+                          minWidth: '400',
+                          minHeight: '230',
+                          buttons:
+                          {
+                            "<!--$TXT_BTN_YES--> ": function ()
+                            {
+                              $(":button:contains('<!--$TXT_BTN_YES-->')").prop("disabled", true).addClass("ui-state-disabled");
+                              $('#dialog').html('<center><br/><br/><!--$TXT_EMPTY_LOG_DIALOG_PROGRESS--></center><br/><br/><br/><br/>');
+                              $.get( "/plugins/<!--$psubfolder-->/?mode=empty_logfile", function( data )
+                              {
+                                $('#dialog').html('<center><br/>'+data+'</center>');
+                                setTimeout( function() { $('#dialog').dialog("close"); }, 2000);
+                              }).fail(function() { $('#dialog').html('<center><br/><!--$TXT_EMPTY_LOG_DIALOG_AUTHENTICATE--></center>'); $(":button:contains('<!--$TXT_BTN_YES-->')").prop("disabled", '').removeClass("ui-state-disabled"); });
+                            },
+                            "<!--$TXT_BTN_NO--> ": function ()
+                            {
+                              $('#dialog').dialog("close");
+                            }
+                          },
+                          close: function (event, ui)
+                          {
+                            $(this).hide();
+                          }
+                        });
+                    };
+                    function CheckConfig(save,message,title)
+                    {
+                        $('#save_data').val('1');
+                        $('#dialog').html(message)
+                        .prop('id','dialog')
+                        .dialog(
+                        {
+                          modal: true, title: title, zIndex: 10000, autoOpen: true, resizable: true,
+                          dialogClass: 'fixedDialog',
+                          width: 'auto',
+                          height: 'auto',
+                          minWidth: '410',
+                          minHeight: '230',
+                          buttons:
+                          {
+                            '<!--$TXT_BTN_SAVE_CFG_DIALOG_CLOSE-->': function ()
+                            {
+                              $('#dialog').dialog("close");
+                            }
+                          },
+                          close: function (event, ui)
+                          {
+                            $(this).hide();
+                          },
+                          open: function (event, ui)
+                          {
+
+                          $('#dialog').html('<center><br/><br/><div class="spinner"><div class="rect1"></div><div class="rect2"></div><div class="rect3"></div><div class="rect4"></div></div><!--$TXT_PLEASE_WAIT--><br/><br/><br/>');
+
+                              $.ajax(
+                              {
+                                type: "POST",
+                                dataType: "text",
+                                url: "./index.cgi?do=check_config",
+                                data: $('#main_form').serializeArray(),
+                                cache: false,
+                                success: function(data)
+                                {
+                                  $('#dialog').html('<center><br/>'+data+'<br/><br/></center>');
+                                }
+                              }).fail(function() { $('#dialog').html('<center><br/><!--$TXT_SAVE_CFG_DIALOG_FAIL--><br/><br/></center>'); });
+                          }
+                        });
+                        $('.ui-button:contains("<!--$TXT_BTN_SAVE-->")').click()
+                    };
+                    function play(vg_id_to_play)
+                    {
+                            $.ajax(
+                            {
+                              type: "POST",
+                              dataType: "text",
+                              url: "./index.cgi?do=makecall&vg="+vg_id_to_play,
+                              data: $('#main_form').serializeArray(),
+                              cache: false,
+                              success: function(data)
+                              {
+                                $('#call_result'+vg_id_to_play).html(data);
+                                $('#call_result'+vg_id_to_play).fadeTo( "slow", 1 );
+                              }
+                            }).fail(function()
+                            {
+                              $('#call_result'+vg_id_to_play).html('<!--$TXT_JOB_QUEUED_FAIL-->');
+                              $('#call_result'+vg_id_to_play).removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' );
+                              $('#call_result'+vg_id_to_play).fadeTo( "slow", 1 );
+                             });
+                            setTimeout( function()
+                            {
+                              $('#call_result'+vg_id_to_play).fadeTo( "slow", 0 );
+                          }, 5000);
+                    }
+					//**************************************** Added by OL ************************************
+					// Initialisierung beim Laden / jQuery Mobile Page Events
+					$(document).on('pageinit pageshow ready', function () {
+						// sicherheitshalber erstmal verstecken
+						$("#t2s-link-row, #t2s-ip-label-row, #t2s-ip-field-row").hide();
+						// Werte setzen + refresh
+						try { $('#PLUGIN_USE').slider('refresh'); } catch(e){}
+						try { $('#T2S_USE').slider('refresh'); } catch(e){}
+						toggleT2S();
+					  });
+
+					  // Umschalten abfangen
+					  $(document).on('change', '#T2S_USE', toggleT2S);
+										
+					$(document).ready(function() {
+						//pluguse();
+						//t2son();
+					});
+
+					//**************************************** End of added by OL ************************************
+                  </script>
