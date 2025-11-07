@@ -23,9 +23,6 @@ $user                 ="Text2SIP";
 $pass                 ="loxberry";
 $pico2wave            = "/usr/bin/pico2wave";
 $sox                  = "/usr/bin/sox";
-#********************** Added/changed by OL ***********************************
-$lame 				  = "/usr/bin/lame";
-#******************************************************************************
 $sipcmd               = $mydir."/../../../../webfrontend/htmlauth/plugins/$psubdir/bin/sipcmd";
 $option_o             = ""; # Heavy sipcmd Debug 
 
@@ -34,7 +31,6 @@ $plugin_phrase_array  = parse_ini_file("$pluginlanguagefile");
 $plugin_cfg_array     = parse_ini_file("$plugincfgfile");
 $DEBUG_USE            = $plugin_cfg_array['DEBUG_USE'                            ];
 $PLUGIN_USE           = $plugin_cfg_array['PLUGIN_USE'                           ];
-
 if ( !$PLUGIN_USE == "on" ) { die( $PLUGIN_USE.$plugin_phrase_array['ERROR0003'] ); }
 
 if (!is_dir($lbplogdir)) 
@@ -264,37 +260,17 @@ else if($_REQUEST["mode"] == "make_call")
         $P2W_Text = str_replace("##", $msinfo, $P2W_Text);
       }
     }
-	
-	#********************** Added/changed by OL ***********************************
-	$plugins = LBSystem::get_plugins();
-	# Text-2-Speech Plugin Name from Plugins DB
-	$T2SPlugin = "Text-2-Speech";
-	$T2S_INSTALLED = "false";
-	$minreleaset2s = "1.2.1";
-	# check if Text-2-Speech Plugin is installed
-	foreach($plugins as $plugin) {
-		if ($plugin['PLUGINDB_TITLE'] == $T2SPlugin) {
-			# check if min Version of Text-2-Speech is installed
-			if ($plugin['PLUGINDB_VERSION'] >= $minreleaset2s) {
-				$T2S_INSTALLED = "true";
-			}
-		}
-	}
-	$T2S_USE = $plugin_cfg_array['T2S_USE'];
-	if ($T2S_INSTALLED == "false" or $T2S_USE == "") {
-		usepico();
-	} else {
-		uset2s();
-	}
-	#*******************************************************************************
-	
-	$cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
-	fwrite($pluginjobfile_handle, "$cmd \n");
-	debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
-	
-	$check_result ="";
-	$debug_value  ='2>/dev/null';
-	if ( $DEBUG_USE == "1" )
+
+    debug('DBG_CREATE_JOB',$pluginjobfile,6);
+    $cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
+    fwrite($pluginjobfile_handle, "$cmd \n");
+    debug('DBG_ADD_CMD_TO_JOB',$cmd,6 );
+    $cmd = $sox  . ' -v 0.9 "'.$plugintmpfile.'" -t wav -b 16 -r 8000 "'.$pluginwavfile.'" 2>&1 >>'.$pluginlogfile;
+    fwrite($pluginjobfile_handle, "$cmd \n");
+    debug('DBG_ADD_CMD_TO_JOB',$cmd,7);
+    $check_result ="";
+    $debug_value  ='2>/dev/null';
+    if ( $DEBUG_USE == "1" )
     {
       $debug_value = '2>&1';
       $option_o = " -o $sipcmdlogfile ";
@@ -343,125 +319,6 @@ else
 {
     $result = "?! :o(";
 }
-
-
-
-#********************** Added by OL ***********************************
-/**
-/* Funktion : usepico --> Use Pico to create voice
-/*
-/* @param: 	none
-/* @return: empty
-**/	
-
-function usepico()   {
-	
-	global $pluginjobfile, $cmd, $pico2wave, $P2W_lang, $plugintmpfile, $P2W_Text, $pluginlogfile, $sox, $pluginwavfile, $pluginjobfile_handle;
-	
-	debug('DBG_CREATE_JOB',$pluginjobfile,6);
-	$cmd = $pico2wave . ' -l "'.$P2W_lang.'" -w "'.$plugintmpfile.'" "'.$P2W_Text.'" 2>&1 >>'.$pluginlogfile;
-	fwrite($pluginjobfile_handle, "$cmd \n");
-	return;
-}
-
-
-
-/**
-/* Funktion : uset2s --> Use Text-2-Speech Interface to create voice
-/*
-/* @param: 	none
-/* @return: empty
-**/	
-
-function uset2s()   {
-	
-	global $pluginjobfile, $plugintmpfile, $P2W_Text, $pluginlogfile, $sox, $pluginwavfile, $lame, $ttsfile, $pluginjobfile_handle, $cmd;
-	
-	debug('DBG_CREATE_JOB',$pluginjobfile,6);
-	$jsonstr = t2s_post_request($P2W_Text);
-	$json = json_decode($jsonstr, True);
-	# Additional Error handling if something went wrong during Text-2-speech Voice file creation
-	if ($json['success'] != "1")  {
-		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_CMD_TO_JOB'].$json['warning']."\n", 3, $pluginlogfile);
-		error_log( date('Y-m-d H:i:s ').$plugin_phrase_array['DBG_ADD_CMD_TO_JOB']."Fall back to Pico\n", 3, $pluginlogfile);
-		debug('DBG_ADD_CMD_TO_JOB',$pluginjobfile,6);
-		$cmd = $json['warning'].' >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
-		$cmd = 'Fall back to Pico >>'.$pluginlogfile;
-		fwrite($pluginjobfile_handle, "$cmd \n");
-		# Fall back to Pico
-		usepico();
-    } 
-	$ttsfile = $json['fullttspath'];
-	debug('DBG_CREATE_JOB',$pluginjobfile,6);
-	$cmd = exec($lame.' --decode '.$ttsfile.' '.$plugintmpfile).' 2>&1 >>'.$pluginlogfile;
-	fwrite($pluginjobfile_handle, "$cmd \n");
-	return;
-}
-	
-	
-	
-/**
-/* Funktion : t2s_post_request --> generiert einen POST request zum text2speech Plugin
-/*
-/* @param: 	$text, $greet, $lbplogdir, $plugindata, $pluginlogfile
-/* @return: JSON Array
-**/	
-
-function t2s_post_request($P2W_Text)   {
-	
-	global $plugindir, $lbplogdir, $plugindata, $pluginlogfile;
-	#echo '<PRE>';
-	
-	$myIP = LBSystem::get_localip();
-	
-	// Url
-	$url = 'http://'.$myIP.'/plugins/text2speech/index.php';
-		
-	// Initiate cURL.
-	$ch = curl_init($url);
-	
-	$greet = "0";
-	 
-	// populate JSON data.
-	$jsonData = array(
-		'text' => $P2W_Text,
-		'greet' => $greet,
-		'plugindir' => $plugindata['PLUGINDB_FOLDER'],
-		'pluginlogdir' => $lbplogdir,
-		'pluginlogfile' => $pluginlogfile
-	);
-		 
-	// Encode the array into JSON.
-	$jsonDataEncoded = json_encode($jsonData);
-				 
-	// Tell cURL that we want to send a POST request.
-	curl_setopt($ch, CURLOPT_POST, 1);
-	 
-	// Attach our encoded JSON string to the POST fields.
-	curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonDataEncoded);
-	 
-	// Set the content type to application/json
-	curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json')); 
-	
-	// Request response from Call
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		 
-	// Execute the request
-	$result = curl_exec($ch);
-	
-	#print_r(json_decode($result));
-	// was the request successful?
-	if($result === false)  {
-		error_log( date('Y-m-d H:i:s ')." POST Request wasn't successfull\n", 3, $pluginlogfile);
-	} else {
-		error_log( date('Y-m-d H:i:s ')." POST Request was successfull. Data has been returned.\n", 5, $pluginlogfile);
-	}
-	// close cURL
-	curl_close($ch);
-	return $result;
-}
-#**********************************************************************
 
 header('Content-Type: text/plain; charset=utf-8');
 echo "$result";

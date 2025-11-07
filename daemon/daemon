@@ -19,10 +19,10 @@ PATH="/sbin:/bin:/usr/sbin:/usr/bin"
 # 11.02.2018 16:31:38
 
 plugindir="text2sip"
-logfile="REPLACELBPLOGDIR/Text2SIP.log"
-plugconfigfile="REPLACELBPCONFIGDIR/Text2SIP.cfg"
-flagfile="REPLACELBPCONFIGDIR/modify.me"
-datafolder="REPLACELBPDATADIR"
+logfile="REPLACELBHOMEDIR/log/plugins/text2sip/Text2SIP.log"
+plugconfigfile="REPLACELBHOMEDIR/config/plugins/text2sip/Text2SIP.cfg"
+flagfile="REPLACELBHOMEDIR/config/plugins/text2sip/modify.me"
+datafolder="REPLACELBHOMEDIR/data/plugins/text2sip"
 touch $logfile
 chown loxberry:loxberry $logfile
 chmod 666 $logfile
@@ -31,12 +31,12 @@ if [ -r $flagfile ]
 then
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
   echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
-  cd REPLACELBPDATADIR
+  cd REPLACELBHOMEDIR/data/plugins/text2sip
   export DEBIAN_FRONTEND="noninteractive"
   apt-get -y install --reinstall man-db  2>&1 >>$logfile
-  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACELBPCONFIGDIR "   2>&1 >>$logfile
-  chown loxberry:loxberry REPLACELBPCONFIGDIR/*                                                               2>&1 >>$logfile
-  chmod 664 REPLACELBPCONFIGDIR/Text2SIP*                                                                     2>&1 >>$logfile
+  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACELBHOMEDIR/config/plugins/text2sip "   2>&1 >>$logfile
+  chown loxberry:loxberry REPLACELBHOMEDIR/config/plugins/text2sip/*                                                               2>&1 >>$logfile
+  chmod 664 REPLACELBHOMEDIR/config/plugins/text2sip/Text2SIP*                                                                     2>&1 >>$logfile
   cd $datafolder                                                                                                               2>&1 >>$logfile
   mkdir wav
   chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
@@ -48,12 +48,71 @@ then
   then
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Path $arch not exists. That is bad!"                                         2>&1 >>$logfile
   fi
-  cp sipcmd REPLACELBPHTMLAUTHDIR/bin/                                                                                        2>&1 >>$logfile
+  cp sipcmd REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/                                                                                        2>&1 >>$logfile
   if [ $? -eq 0 ]
   then
     echo `date +"%b  %e %H:%M:%S "`"Copy of sipcmd for Architecture $arch successfully completed."                      2>&1 >>$logfile
-    chown loxberry:loxberry REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                            2>&1 >>$logfile
-    chmod 755 REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                                         2>&1 >>$logfile
+    chown loxberry:loxberry REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd                                                            2>&1 >>$logfile
+    chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd 
+
+	2>&1 >>$logfile
+  # --- BEGIN: compat OpenLDAP 2.4 Einbindung (Bookworm/Bullseye) ---
+  echo `date +"%b  %e %H:%M:%S "`"Preparing compat OpenLDAP 2.4 runtime for $arch." 2>&1 >>$logfile
+
+  compat_dir="$datafolder/$arch/compat-ldap24"
+  if [ -d "$compat_dir" ]; then
+    echo `date +"%b  %e %H:%M:%S "`"compat dir found: $compat_dir" 2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"compat dir not found, trying to stage from local deb (best effort)." 2>&1 >>$logfile
+    tmpdir="$(mktemp -d)"
+    if [ -f "$datafolder/$arch/libldap-2.4-2_${arch}.deb" ]; then
+      dpkg-deb -x "$datafolder/$arch/libldap-2.4-2_${arch}.deb" "$tmpdir" 2>&1 >>$logfile || true
+      mkdir -p "$compat_dir"
+      case "$arch" in
+        amd64)  src="$tmpdir/usr/lib/x86_64-linux-gnu" ;;
+        arm64)  src="$tmpdir/usr/lib/aarch64-linux-gnu" ;;
+        armhf)  src="$tmpdir/usr/lib/arm-linux-gnueabihf" ;;
+        *)      src="$tmpdir/usr/lib" ;;
+      esac
+      if [ -d "$src" ]; then
+        cp -a "$src"/liblber-2.4.so.* "$compat_dir"/ 2>/dev/null || true
+        cp -a "$src"/libldap_r-2.4.so.* "$compat_dir"/ 2>/dev/null || true
+        cp -a "$src"/libldap-2.4.so.*   "$compat_dir"/ 2>/dev/null || true
+        ( cd "$compat_dir" && \
+          rm -f liblber-2.4.so.2 libldap_r-2.4.so.2 libldap-2.4.so.2 libldap.so.2 ; \
+          [ -f liblber-2.4.so.2 ] || ln -sf "$(ls -1 liblber-2.4.so.* 2>/dev/null | sort -V | tail -n1)" liblber-2.4.so.2 ; \
+          [ -f libldap_r-2.4.so.2 ] || ln -sf "$(ls -1 libldap_r-2.4.so.* 2>/dev/null | sort -V | tail -n1)" libldap_r-2.4.so.2 ; \
+          [ -f libldap-2.4.so.2 ] || ln -sf libldap_r-2.4.so.2 libldap-2.4.so.2 ; \
+          ln -sf libldap-2.4.so.2 libldap.so.2 )
+        echo `date +"%b  %e %H:%M:%S "`"staged compat libs into $compat_dir" 2>&1 >>$logfile
+      else
+        echo `date +"%b  %e %H:%M:%S "`"source path for compat libs not found in $tmpdir" 2>&1 >>$logfile
+      fi
+    else
+      echo `date +"%b  %e %H:%M:%S "`"no local libldap-2.4-2_${arch}.deb, skip staging." 2>&1 >>$logfile
+    fi
+    rm -rf "$tmpdir"
+  fi
+
+  # Wrapper um sipcmd: setzt nur LD_LIBRARY_PATH und startet das Original
+  if [ -x REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd ] && [ ! -f REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd.real ]; then
+    mv REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd.real 2>&1 >>$logfile
+    cat > REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd <<'EOSIP'
+#!/usr/bin/env bash
+set -euo pipefail
+arch="$(dpkg --print-architecture)"
+base="REPLACELBHOMEDIR/data/plugins/text2sip"
+export LD_LIBRARY_PATH="$base/$arch/compat-ldap24:$base/$arch${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# optional: CAPI/ISDN-Unterdrückung, falls störende shm_open-Warnung:
+# [ -f "$base/$arch/libcapi20.so.3" ] && mv "$base/$arch/libcapi20.so.3" "$base/$arch/libcapi20.so.3.disabled" 2>/dev/null || true
+exec "REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd.real" "$@"
+EOSIP
+    chown loxberry:loxberry REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd 2>&1 >>$logfile
+    chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd 2>&1 >>$logfile
+    echo `date +"%b  %e %H:%M:%S "`"installed sipcmd wrapper with compat LD_LIBRARY_PATH" 2>&1 >>$logfile
+  fi
+  # --- END: compat OpenLDAP 2.4 Einbindung ---
+
   else
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of sipcmd for Architecture $arch failed. That is bad!"                      2>&1 >>$logfile
   fi
@@ -64,34 +123,13 @@ then
   else
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries  failed. That is bad!"  2>&1 >>$logfile
   fi
-  echo `date +"%b  %e %H:%M:%S "`"Try to install packages"                                                                     2>&1 >>$logfile
-  dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile
-  if [ $? -eq 0 ]
-  then
-    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico-data successfully completed."                           2>&1 >>$logfile
-  else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-data failed. That is bad!"                       2>&1 >>$logfile
-  fi
-   dpkg -i libttspico0_*                                                                                                   2>&1 >>$logfile
-  if [ $? -eq 0 ]
-  then
-    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico0 successfully completed."                               2>&1 >>$logfile
-  else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico0 failed. That is bad!"                           2>&1 >>$logfile
-  fi
-  sudo dpkg -i libttspico-utils_*                                                                                              2>&1 >>$logfile
-  if [ $? -eq 0 ]
-  then
-    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico-utils successfully completed."                          2>&1 >>$logfile
-  else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-utils failed. That is bad!"                      2>&1 >>$logfile
-  fi
+
   echo `date +"%b  %e %H:%M:%S "`"Installation completed!"                                                                       2>&1 >>$logfile
   rm $flagfile																											        2>&1 >>$logfile
 else
   echo `date +"%b  %e %H:%M:%S "`"modify.me not found. Plugin modification already done. Exit."
   echo `date +"%b  %e %H:%M:%S "`"Plugin modification already done."                                                           2>&1 >>$logfile
-  chmod 755 REPLACELBPHTMLAUTHDIR/bin/sipcmd                                     2>&1 >>$logfile
+  chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd                                     2>&1 >>$logfile
 fi
 chown loxberry:loxberry $logfile
 chmod 666 $logfile

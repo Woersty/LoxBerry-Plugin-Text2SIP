@@ -1,1 +1,35 @@
-loxberry ALL=(ALL) NOPASSWD: /usr/bin/mount, /usr/bin/mount.cifs, /usr/bin/umount, /usr/bin/mkdir, /usr/bin/chown, /usr/bin/chmod, /usr/bin/touch, /usr/bin/ls
+# REPLACELBHOMEDIR/system/sudoers/Text2SIP
+# Cleaned-up sudoers for Text2SIP bridge operations
+
+Defaults:loxberry !requiretty
+Defaults:loxberry env_reset,secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# --- File and Directory Operations ---
+Cmnd_Alias T2S_FILEOPS = \
+  /usr/bin/install, \
+  /bin/mkdir, /usr/bin/mkdir, \
+  /bin/rm, /usr/bin/rm, \
+  /bin/mv, /usr/bin/mv, \
+  /bin/chmod, /usr/bin/chmod, \
+  /bin/chown, /usr/bin/chown, \
+  /usr/bin/setfacl, /bin/setfacl, \
+  /bin/touch, /usr/bin/touch, \
+  /bin/tar, /usr/bin/tar
+
+# --- Mosquitto Service Control ---
+Cmnd_Alias T2S_MOSQCTL = \
+  /bin/systemctl restart mosquitto, \
+  /bin/systemctl start mosquitto, \
+  /bin/systemctl stop mosquitto, \
+  /usr/bin/systemctl restart mosquitto, \
+  /usr/bin/systemctl start mosquitto, \
+  /usr/bin/systemctl stop mosquitto, \
+  /usr/sbin/service mosquitto start, \
+  /usr/sbin/service mosquitto stop
+
+# --- Specific Scripts Allowed ---
+Cmnd_Alias T2S_SCRIPTS = \
+  REPLACELBHOMEDIR/sbin/mqtt-handler.pl
+
+# --- Final Rule ---
+loxberry ALL=(ALL) NOPASSWD: T2S_FILEOPS, T2S_MOSQCTL, T2S_SCRIPTS

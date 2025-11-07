@@ -8,5 +8,6 @@
 # cron script will not be uninstalled cleanly.
 
 # Will be executed as user "loxberry".
+MAILTO=""
 
 /usr/bin/bash REPLACELBPHTMLAUTHDIR/bin/cleanup_logs.sh

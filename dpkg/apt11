@@ -1,4 +1,6 @@
 curl
 task-spooler 
 ffmpeg
-gpg
+avahi-daemon
+avahi-utils
+libnss-mdns

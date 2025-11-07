@@ -8,5 +8,11 @@
 # cron script will not be uninstalled cleanly.
 
 # Will be executed as user "loxberry".
+MAILTO=""
 
-/usr/bin/bash REPLACELBPHTMLAUTHDIR/bin/pass_rotate.sh
+ROLE_MARKER="/etc/mosquitto/role/sip-bridge"
+HANDSHAKE="REPLACELBPHTMLAUTHDIR/bin/mqtt_handshake_test.pl"
+
+if [ -e "$ROLE_MARKER" ]; then
+  "$HANDSHAKE" --quiet
+fi
