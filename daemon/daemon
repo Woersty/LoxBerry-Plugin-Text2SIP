@@ -1,5 +1,5 @@
 #!/bin/bash
-### BEGIN INIT INFO
+
 # Provides:          Text2SIP-Plugin
 # Required-Start:    $remote_fs $syslog $network
 # Required-Stop:     $remote_fs $syslog $network
@@ -7,13 +7,12 @@
 # Default-Stop:      0 1 6
 # Short-Description: This file configures the Loxberry Text2SIP-Plugin.
 # Description:       This file configures the Loxberry Text2SIP-Plugin.
-### END INIT INFO
+
 
 PATH="/sbin:/bin:/usr/sbin:/usr/bin"
 
 . /lib/lsb/init-functions
 
-### END INIT INFO
 
 # Version v2018.2.12
 # 11.02.2018 16:31:38
@@ -113,6 +112,12 @@ EOSIP
   fi
   # --- END: compat OpenLDAP 2.4 Einbindung ---
 
+  cp sipcmd REPLACELBPHTMLAUTHDIR/bin/                                                                                        2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Copy of sipcmd for Architecture $arch successfully completed."                      2>&1 >>$logfile
+    chown loxberry:loxberry REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                            2>&1 >>$logfile
+    chmod 755 REPLACELBPHTMLAUTHDIR/bin/sipcmd                                                                         2>&1 >>$logfile
   else
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of sipcmd for Architecture $arch failed. That is bad!"                      2>&1 >>$logfile
   fi
@@ -122,6 +127,28 @@ EOSIP
     echo `date +"%b  %e %H:%M:%S "`"Copy of libraries successfully completed." 2>&1 >>$logfile
   else
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries  failed. That is bad!"  2>&1 >>$logfile
+  fi
+  echo `date +"%b  %e %H:%M:%S "`"Try to install packages"                                                                     2>&1 >>$logfile
+  dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico-data successfully completed."                           2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-data failed. That is bad!"                       2>&1 >>$logfile
+  fi
+   dpkg -i libttspico0_*                                                                                                   2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico0 successfully completed."                               2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico0 failed. That is bad!"                           2>&1 >>$logfile
+  fi
+  sudo dpkg -i libttspico-utils_*                                                                                              2>&1 >>$logfile
+  if [ $? -eq 0 ]
+  then
+    echo `date +"%b  %e %H:%M:%S "`"Package installation of libttspico-utils successfully completed."                          2>&1 >>$logfile
+  else
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Package installation of libttspico-utils failed. That is bad!"                      2>&1 >>$logfile
   fi
 
   echo `date +"%b  %e %H:%M:%S "`"Installation completed!"                                                                       2>&1 >>$logfile
