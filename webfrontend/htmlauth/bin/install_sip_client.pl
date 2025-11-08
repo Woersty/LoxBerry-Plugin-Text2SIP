@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # install_sip_client.pl — Install MQTT bridge config (Text2SIP) with role & conf handling
 # RUN AS: loxberry (NOT root)
-# Version: 1.2 — adds master-role guard + disabled/ handling + local-listener deploy
+# Version: 1.3 — adds automatic /etc/hosts management (create/update), master-role guard, disabled/ handling, and local-listener deploy
 #
 # What it does:
 #  - Abort if /etc/mosquitto/role/t2s-master exists
@@ -9,6 +9,7 @@
 #  - Move LoxBerry defaults (mosq_mqttgateway.conf, mosq_passwd) to disabled/
 #  - Copy plugin's 10-local-listener.conf into /etc/mosquitto/conf.d/
 #  - Install bridge certs & write 30-bridge-t2s.conf (with tts-handshake/# both 0)
+#  - Ensure master hostname/IP in /etc/hosts (auto add/update)
 #  - Restart Mosquitto via mqtt-handler.pl
 #  - Optional handshake test
 #
@@ -49,7 +50,7 @@ sub fatal {
   exit 1;
 }
 
-LOGINF("==== Starting Text2SIP bridge client install v1.2 ====");
+LOGINF("==== Starting Text2SIP bridge client install v1.3 ====");
 
 # ---------- Constants ----------
 my $BUNDLE_DEFAULT = 'REPLACELBHOMEDIR/config/plugins/text2sip/bridge/t2s_bundle.tar.gz';
@@ -70,7 +71,6 @@ my $LOCAL_LISTENER_DST      = File::Spec->catfile($CONF_DIR_SYS, '10-local-liste
 my ($CA_FILE_SYS, $CERT_FILE_SYS, $KEY_FILE_SYS, $CLIENT_ID);
 my ($BRIDGE_HOST, $BRIDGE_PORT) = ('t2s.local', 8883);
 
-# Standard LoxBerry gateway files that must be disabled on a pure bridge host
 my @LB_DEFAULT_CONFS = (
   File::Spec->catfile($CONF_DIR_SYS, 'mosq_mqttgateway.conf'),
   File::Spec->catfile($CONF_DIR_SYS, 'mosq_passwd'),
@@ -106,12 +106,10 @@ if ($> == 0) {
 }
 
 # ---------- Roles ----------
-# Hard abort if this host is a T2S master
 if (-e $MASTER_MARKER) {
   fatal("Found role 't2s-master' – Bridge installation is not allowed on this host.");
 }
 
-# Ensure role dir & marker
 system('sudo','install','-o','root','-g','root','-m','0755','-d', $ROLE_DIR) == 0
   or fatal("Cannot create role directory '$ROLE_DIR'");
 
@@ -130,7 +128,6 @@ LOGOK("Using bundle: $bundle");
 my $tmpdir = tempdir('sip_bundle_XXXXXX', TMPDIR => 1, CLEANUP => 1);
 system('tar', '-xzf', $bundle, '-C', $tmpdir) == 0 or fatal("Bundle extraction failed");
 
-# ---------- Find files in bundle ----------
 sub find_first {
   my ($root, $regex) = @_;
   my @todo = ($root);
@@ -157,7 +154,7 @@ my $info   = find_first($tmpdir, qr/master\.info$/);
 $ca_in && $crt_in && $key_in or fatal("Missing certificate or key file in bundle");
 LOGOK("Found CA, client cert and key in bundle.");
 
-# ---------- Parse master.info (JSON or simple KV) ----------
+# ---------- Parse master.info ----------
 $CLIENT_ID   = 't2s-bridge';
 if ($info) {
   eval {
@@ -185,9 +182,60 @@ if ($info) {
 }
 LOGINF("Bridge target: $BRIDGE_HOST:$BRIDGE_PORT, clientid=$CLIENT_ID");
 
-$CA_FILE_SYS   = File::Spec->catfile($CA_DIR_SYS, 'mosq-ca.crt');
-$CERT_FILE_SYS = File::Spec->catfile($CERTS_DIR_SYS, "$CLIENT_ID.crt");
-$KEY_FILE_SYS  = File::Spec->catfile($CERTS_DIR_SYS, "$CLIENT_ID.key");
+# ---------- Ensure /etc/hosts entry ----------
+my $HOSTS_FILE = '/etc/hosts';
+my $MASTER_IP;
+
+if ($info) {
+    eval {
+        open my $fh, '<:encoding(UTF-8)', $info or die $!;
+        my $txt = do { local $/; <$fh> };
+        close $fh;
+
+        if ($txt =~ /^\s*\{.*\}\s*$/s) {
+            require JSON::PP;
+            my $j = JSON::PP::decode_json($txt);
+            $MASTER_IP = $j->{IP} // $j->{MASTER_IP};
+        } else {
+            for my $line (split /\R/, $txt) {
+                next if $line =~ /^\s*#/;
+                if ($line =~ /^\s*IP\s*[:=]\s*(\S+)/)         { $MASTER_IP = $1 }
+                if ($line =~ /^\s*MASTER_IP\s*[:=]\s*(\S+)/)  { $MASTER_IP = $1 }
+            }
+        }
+        1;
+    } or LOGWARN("master.info IP parsing failed: $@");
+}
+
+if ($BRIDGE_HOST !~ /^\d{1,3}(?:\.\d{1,3}){3}$/) {
+    my $existing_line = `grep -E "^[0-9.]+\\s+$BRIDGE_HOST(\\s|\$)" $HOSTS_FILE 2>/dev/null`;
+    chomp($existing_line);
+
+    if ($existing_line eq '' && $MASTER_IP) {
+        LOGINF("Adding missing host entry: $BRIDGE_HOST → $MASTER_IP");
+        my $cmd = "echo '$MASTER_IP\t$BRIDGE_HOST' | sudo tee -a $HOSTS_FILE >/dev/null";
+        system($cmd) == 0
+            ? LOGOK("Added '$BRIDGE_HOST' with IP $MASTER_IP to /etc/hosts")
+            : LOGWARN("Failed to add $BRIDGE_HOST to /etc/hosts — check sudo permissions");
+
+    } elsif ($existing_line ne '' && $MASTER_IP) {
+        if ($existing_line !~ /^\Q$MASTER_IP\E\b/) {
+            LOGWARN("Host entry for $BRIDGE_HOST exists but with different IP. Updating to $MASTER_IP...");
+            my $cmd = "sudo sed -i.bak '/\\s$BRIDGE_HOST(\\s|\$)/d' $HOSTS_FILE && echo '$MASTER_IP\t$BRIDGE_HOST' | sudo tee -a $HOSTS_FILE >/dev/null";
+            system($cmd) == 0
+                ? LOGOK("Updated '$BRIDGE_HOST' entry in /etc/hosts to IP $MASTER_IP")
+                : LOGWARN("Failed to update $BRIDGE_HOST entry — check sudo permissions");
+        } else {
+            LOGINF("$BRIDGE_HOST already mapped to correct IP ($MASTER_IP) — no change needed");
+        }
+    } elsif (!$MASTER_IP) {
+        LOGWARN("Host $BRIDGE_HOST not resolvable and no IP provided in master.info");
+    } else {
+        LOGINF("$BRIDGE_HOST is resolvable — no /etc/hosts update needed");
+    }
+} else {
+    LOGINF("Bridge host is already an IP ($BRIDGE_HOST) — skipping /etc/hosts entry");
+}
 
 # ---------- Key/Cert match check ----------
 my $mod_cert = `openssl x509 -in '$crt_in' -noout -modulus 2>/dev/null | openssl md5 2>/dev/null`;
@@ -200,28 +248,24 @@ if ($mod_cert ne $mod_key) {
 }
 
 # ---------- Install certs ----------
-# Verzeichnisse (strikter)
 system('sudo','install','-d','-o','root','-g','mosquitto','-m','0750',$CA_DIR_SYS,$CERTS_DIR_SYS) == 0
   or fatal("Creating cert dirs failed");
 
-# CA bleibt root:root, 0644 ok
-system('sudo','install','-o','root','-g','root','-m','0644', $ca_in,  $CA_FILE_SYS) == 0
+system('sudo','install','-o','root','-g','root','-m','0644', $ca_in,  File::Spec->catfile($CA_DIR_SYS,'mosq-ca.crt')) == 0
   or fatal("Installing CA file failed");
 
-# Client-Zertifikat & Key: root:mosquitto, 0640
-system('sudo','install','-o','root','-g','mosquitto','-m','0640', $crt_in, $CERT_FILE_SYS) == 0
+system('sudo','install','-o','root','-g','mosquitto','-m','0640', $crt_in, File::Spec->catfile($CERTS_DIR_SYS,"$CLIENT_ID.crt")) == 0
   or fatal("Installing client cert failed");
-system('sudo','install','-o','root','-g','mosquitto','-m','0640', $key_in, $KEY_FILE_SYS) == 0
+system('sudo','install','-o','root','-g','mosquitto','-m','0640', $key_in, File::Spec->catfile($CERTS_DIR_SYS,"$CLIENT_ID.key")) == 0
   or fatal("Installing client key failed");
 LOGOK("Certificate chain installed.");
 
-# ---------- Prepare conf.d & disabled/ ----------
+# ---------- Prepare conf.d ----------
 system('sudo','install','-o','root','-g','root','-m','0755','-d', $CONF_DIR_SYS) == 0
   or fatal("Cannot ensure conf.d exists");
 system('sudo','install','-o','root','-g','root','-m','0755','-d', $DIS_DIR_SYS) == 0
   or fatal("Cannot ensure conf.d/disabled exists");
 
-# Move ONLY LoxBerry default gateway files to disabled/
 for my $f (@LB_DEFAULT_CONFS) {
   next unless (-e $f or -l $f);
   my $base = File::Basename::basename($f);
@@ -235,7 +279,6 @@ for my $f (@LB_DEFAULT_CONFS) {
   }
 }
 
-# ---------- Deploy plugin's local listener (fallback) ----------
 if (-r $PLUG_LOCAL_LISTENER_SRC) {
   system('sudo','install','-o','root','-g','root','-m','0644', $PLUG_LOCAL_LISTENER_SRC, $LOCAL_LISTENER_DST) == 0
     ? LOGOK("Deployed 10-local-listener.conf to conf.d/")
@@ -256,16 +299,15 @@ cleansession true
 restart_timeout 2 30
 try_private true
 
-bridge_cafile    $CA_FILE_SYS
-bridge_certfile  $CERT_FILE_SYS
-bridge_keyfile   $KEY_FILE_SYS
+bridge_cafile    /etc/mosquitto/ca/mosq-ca.crt
+bridge_certfile  /etc/mosquitto/certs/sip-bridge/$CLIENT_ID.crt
+bridge_keyfile   /etc/mosquitto/certs/sip-bridge/$CLIENT_ID.key
 bridge_insecure  false
 tls_version      tlsv1.2
 
 notifications    true
 bridge_protocol_version mqttv311
 
-# Topics
 topic tts-publish/# out 0
 topic tts-subscribe/# in 0
 topic tts-handshake/# both 0
@@ -280,7 +322,7 @@ system('sudo','install','-o','root','-g','mosquitto','-m','0644', $tmp_conf, $BR
   or fatal("Bridge config install failed");
 LOGOK("Bridge config installed: $BRIDGE_CONF");
 
-# ---------- Optional: Check aclfile in bundle (non-fatal) ----------
+# ---------- Optional aclfile check ----------
 if (defined $acl_in && -r $acl_in) {
   eval {
     open my $afh, '<:encoding(UTF-8)', $acl_in or die $!;
@@ -296,12 +338,11 @@ if (defined $acl_in && -r $acl_in) {
   LOGINF("No aclfile in bundle (ok).");
 }
 
-# ---------- Bundle rename (evidence) ----------
+# ---------- Bundle rename ----------
 unless ($NO_RENAME) {
   if (-w $BUNDLE_DEFAULT && $bundle eq $BUNDLE_DEFAULT) {
     my ($d,$m,$y) = (localtime)[3,4,5];
-    $y += 1900;
-    $m += 1;
+    $y += 1900; $m += 1;
     my $date = sprintf("%04d-%02d-%02d", $y, $m, $d);
     my $new = $BUNDLE_DEFAULT;
     $new =~ s/\.tar\.gz$/-installed-$date.tar.gz/;
@@ -322,15 +363,13 @@ unless ($no_restart) {
   LOGINF("Restarting Mosquitto …");
   system('sudo REPLACELBHOMEDIR/sbin/mqtt-handler.pl action=restartgateway >/dev/null 2>&1 || true');
   LOGOK("Mosquitto restarted via mqtt-handler.pl.");
-
-  # Kleine Pause, damit Mosquitto sicher bereit ist
   LOGINF("Waiting 3 seconds for Mosquitto to become ready...");
   sleep 3;
 } else {
   LOGINF("Skipping Mosquitto restart due to --no-restart");
 }
 
-# ---------- Post-install handshake test (non-fatal) ----------
+# ---------- Post-install handshake test ----------
 my $handshake_script = 'REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/mqtt_handshake_test.pl';
 if (-x $handshake_script) {
   LOGINF("Running MQTT handshake test after installation...");

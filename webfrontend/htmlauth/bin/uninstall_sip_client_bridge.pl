@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 # uninstall_sip_client_bridge.pl — Safe or forced removal of T2S SIP client bridge
+# Version: 1.3 — adds automatic cleanup of /etc/hosts entry for the T2S master
 # Detects T2S Master role and protects shared Mosquitto files automatically.
 # Optionally --force for complete uninstall, even on Master systems.
 
@@ -33,22 +34,17 @@ Options:
   --help    Show this help message and exit.
 
 Behavior:
-  - Without --force:  The script detects if the role 't2s-master' exists.
-                      If yes, it enters SAFE mode:
-                        • Keeps CA under /etc/mosquitto/ca/
-                        • Keeps global conf.d files
-                        • Removes only bridge-specific files
-  - With --force:     Removes all bridge-related and CA artifacts
-                      (useful for clean reinstallation)
+  - Without --force:  SAFE mode (keep CA on Master)
+  - With --force:     FULL uninstall (remove everything)
 
 Logfile:
-  REPLACELBHOMEDIR/log/plugins/text2sip/client_install.log
+  /opt/loxberry/log/plugins/text2sip/client_install.log
 USAGE
     exit 0;
 }
 
 # ========= Logging =========
-my $logfile = 'REPLACELBHOMEDIR/log/plugins/text2sip/client_install.log';
+my $logfile = '/opt/loxberry/log/plugins/text2sip/client_install.log';
 open(my $logfh, '>>', $logfile) or die "Cannot open log file $logfile: $!";
 
 sub log_msg {
@@ -61,12 +57,9 @@ sub log_msg {
 sub log_ok   { log_msg("<OK>",   @_); }
 sub log_info { log_msg("<INFO>", @_); }
 sub log_warn { log_msg("<WARN>", @_); }
-sub log_error {
-    log_msg("<ERROR>", @_);
-    exit 1;
-}
+sub log_error { log_msg("<ERROR>", @_); exit 1; }
 
-log_info("==== Starting uninstall of Text2SIP bridge client ====");
+log_info("==== Starting uninstall of Text2SIP bridge client v1.3 ====");
 
 # ========= Paths =========
 my $conf_d_dir       = '/etc/mosquitto/conf.d';
@@ -75,22 +68,34 @@ my $cert_folder      = '/etc/mosquitto/certs/sip-bridge';
 my $ca_file          = '/etc/mosquitto/ca/mosq-ca.crt';
 my $role_bridge      = '/etc/mosquitto/role/sip-bridge';
 my $role_t2s_master  = '/etc/mosquitto/role/t2s-master';
-my $mqtt_handler     = 'REPLACELBHOMEDIR/sbin/mqtt-handler.pl';
+my $mqtt_handler     = '/opt/loxberry/sbin/mqtt-handler.pl';
+my $hosts_file       = '/etc/hosts';
 
 # ========= Role detection =========
 my $is_master = -e $role_t2s_master ? 1 : 0;
-
 if ($is_master && !$force) {
-    log_info("T2S Master role detected ($role_t2s_master) – activating SAFE mode (keep shared files).");
+    log_info("T2S Master role detected – activating SAFE mode (keep shared files).");
 } elsif ($is_master && $force) {
-    log_warn("T2S Master role detected but --force was used → proceeding with FULL uninstall!");
+    log_warn("T2S Master role detected but --force used → proceeding with FULL uninstall!");
 } else {
-    log_info("No T2S Master role detected – proceeding with " . ($force ? "FULL" : "SAFE") . " uninstall mode.");
+    log_info("No T2S Master role detected – proceeding with " . ($force ? "FULL" : "SAFE") . " uninstall.");
 }
 
 # ========= Step 1a: Remove bridge config =========
 my $bridge_conf = "$conf_d_dir/30-bridge-t2s.conf";
+my $bridge_host;
 if (-e $bridge_conf) {
+    # Try to extract hostname from bridge conf before removing
+    eval {
+        open my $fh, '<', $bridge_conf or die $!;
+        while (<$fh>) {
+            if (/^\s*address\s+(\S+):\d+/) {
+                $bridge_host = $1;
+                last;
+            }
+        }
+        close $fh;
+    };
     unlink($bridge_conf)
         ? log_ok("Removed bridge config: $bridge_conf")
         : log_warn("Failed to remove $bridge_conf: $!");
@@ -108,7 +113,7 @@ if (-e $local_listener_conf) {
     log_info("Local listener config not found: $local_listener_conf");
 }
 
-# ========= Step 2: Restore disabled configs (if exist) =========
+# ========= Step 2: Restore disabled configs =========
 if (-d $conf_d_disabled) {
     opendir(my $dh, $conf_d_disabled) or log_error("Cannot open $conf_d_disabled: $!");
     while (my $file = readdir($dh)) {
@@ -167,12 +172,27 @@ if (-e $role_bridge) {
     log_info("Role marker not found: $role_bridge");
 }
 
-# ========= Step 6: Restart Mosquitto safely (with PID check) =========
-log_info("Restarting Mosquitto via mqtt-handler.pl ...");
-my $rc = system("REPLACELBHOMEDIR/sbin/mqtt-handler.pl action=restartgateway >/dev/null 2>&1");
+# ========= Step 6: Clean /etc/hosts entry =========
+if ($bridge_host && $bridge_host !~ /^\d{1,3}(?:\.\d{1,3}){3}$/) {
+    log_info("Checking /etc/hosts for bridge host '$bridge_host'...");
+    my $exists = system("grep -qE '\\s$bridge_host(\\s|\$)' $hosts_file") == 0;
+    if ($exists) {
+        log_info("Removing $bridge_host from /etc/hosts ...");
+        my $cmd = "sudo cp $hosts_file ${hosts_file}.bak-t2s && sudo sed -i '/\\s$bridge_host(\\s|\$)/d' $hosts_file";
+        system($cmd) == 0
+            ? log_ok("Removed '$bridge_host' entry from /etc/hosts (backup: ${hosts_file}.bak-t2s)")
+            : log_warn("Failed to modify /etc/hosts — check sudo permissions");
+    } else {
+        log_info("$bridge_host not found in /etc/hosts — nothing to clean.");
+    }
+} else {
+    log_info("No valid bridge hostname found for /etc/hosts cleanup.");
+}
 
+# ========= Step 7: Restart Mosquitto =========
+log_info("Restarting Mosquitto via mqtt-handler.pl ...");
+my $rc = system("$mqtt_handler action=restartgateway >/dev/null 2>&1");
 if ($rc == 0) {
-    # Wait a moment and verify Mosquitto process
     sleep 2;
     my $pid = `pgrep -x mosquitto 2>/dev/null`;
     chomp($pid);

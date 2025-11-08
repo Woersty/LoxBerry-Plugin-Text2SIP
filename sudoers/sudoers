@@ -14,7 +14,9 @@ Cmnd_Alias T2S_FILEOPS = \
   /bin/chown, /usr/bin/chown, \
   /usr/bin/setfacl, /bin/setfacl, \
   /bin/touch, /usr/bin/touch, \
-  /bin/tar, /usr/bin/tar
+  /bin/tar, /usr/bin/tar, \
+  /usr/bin/tee -a /etc/hosts, \
+  /bin/sed, /usr/bin/sed
 
 # --- Mosquitto Service Control ---
 Cmnd_Alias T2S_MOSQCTL = \
