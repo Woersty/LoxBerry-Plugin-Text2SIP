@@ -1,0 +1,9 @@
+SIP calls now work reliably on systems with Docker installed.
+
+Wrapper automatically isolates docker0 and restores it after each call.
+
+Compatible with all existing Text2SIP configurations.
+
+Logs clearly to /opt/loxberry/log/plugins/text2speech/Text2SIP.log.
+
+No need for manual ip link set docker0 down anymore.

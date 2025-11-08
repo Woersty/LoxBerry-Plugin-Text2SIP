@@ -1,4 +1,107 @@
-                  <div id="dialog"></div>
+		<style>
+			/* ===============================
+			   Gesamter Block
+			   =============================== */
+			.plugin-config-box {
+			  width: 480px;            /* Gesamtbreite des Blocks */
+			  max-width: 100%;
+			  box-sizing: border-box;
+			}
+
+			.plugin-config-table {
+			  width: 100%;
+			  border-collapse: collapse;      /* keine Zellzwischenräume */
+			  table-layout: auto;             /* auto reicht hier; fixed nur bei harten Breiten nötig */
+			}
+
+			/* Alle Zellen: Standard-Padding neutralisieren */
+			.plugin-config-box td {
+			  padding: 0;                      /* wichtig: Theme-Padding entfernen */
+			}
+
+			/* ===============================
+			   Tabellenlayout
+			   =============================== */
+
+			/* Linke Spalte (Labels) */
+			.plugin-config-box td.label {
+			  width: 120px;                    /* steuert, wie weit der Switch rechts sitzt */
+			  vertical-align: middle;
+			  font-weight: normal;
+			  font-size: 0.9em;
+			  white-space: nowrap;             /* Label einzeilig */
+			  line-height: 1.3em;
+			  color: #333;
+			  padding-right: 5px;              /* HIER: nur 5px Abstand zum Switch */
+			}
+
+			/* Rechte Spalte (Switches/Controls) */
+			.plugin-config-box td.control {
+			  vertical-align: middle;
+			  padding-left: 0;                 /* kein zusätzlicher Abstand von rechts */
+			}
+
+			/* ===============================
+			   Flipswitch / Slider (jQuery Mobile)
+			   =============================== */
+
+			/* jQM gibt oft einen linken Außenabstand – entfernen */
+			.plugin-config-box .ui-flipswitch,
+			.plugin-config-box .ui-slider,
+			.plugin-config-box select[data-role="slider"] {
+			  max-width: 140px;
+			  margin-left: 0 !important;       /* näher ans Label */
+			}
+
+			/* ===============================
+			   Link-Zeile unter dem Switch
+			   =============================== */
+			.plugin-config-box .t2s-link-cell {
+			  padding-top: 4px;
+			  padding-left: 0;                  /* bündig mit Switch */
+			}
+			.plugin-config-box .t2s-link {
+			  white-space: nowrap;
+			  font-size: 0.9em;
+			}
+
+			/* ===============================
+			   IP-Label + Feld
+			   =============================== */
+			.plugin-config-box .ip-label {
+			  font-weight: normal;
+			  font-size: 0.8em;
+			  line-height: 1.4em;
+			  padding: 6px 0 4px 0;
+			  color: #333;
+			  white-space: normal;
+			}
+
+			.plugin-config-box .ip-field { text-align: left; }
+
+			/* Wrapper bestimmt die tatsächliche Eingabefeld-Breite */
+			.plugin-config-box .ip-field-inner {
+			  display: inline-block;
+			  width: 260px;                    /* Feldbreite hier einstellen */
+			}
+			.plugin-config-box .ip-field-inner input#T2S_IP {
+			  width: 100%;
+			  padding: 6px;
+			  font-size: 0.9em;
+			  box-sizing: border-box;
+			}
+
+			/* ===============================
+			   Optional: responsiv
+			   =============================== */
+			@media (max-width: 640px) {
+			  .plugin-config-box { width: 100%; max-width: none; }
+			  .plugin-config-box td.label { width: 55%; }
+			}
+			
+		</style>
+				  
+				  <div id="dialog"></div>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/jquery-ui-1.9.2.custom.min.js"></script>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/countrySelect.min.js"></script>
                   <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css">
@@ -8,23 +111,92 @@
                     <table width="100%" style="background: rgba(255,255,192, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
                       <tr>
                         <td width="200px" valign="top">
-                          <table>
-                            <tr>
-                              <td><small><nobr><b><!--$TXT_LABEL_PLUGIN_USE--></b></nobr></small></td>
-                            </tr>
-                            <tr>
-                              <td>
-                                <select name="PLUGIN_USE" id="PLUGIN_USE" data-mini="true" data-track-theme="e" data-role="slider">
-                                  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
-                                  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
-                                </select>
-                              </td>
-                            </tr>
-                          </table>
-                          <script type="text/javascript">$('#PLUGIN_USE').val("<!--$PLUGIN_USE-->");</script>
+						<!-- **************************************** Added/changed by OL ************************************ -->
+						<div class="plugin-config-box">
+						<!-- === Gesamter Text2Speech-Bereich (ein-/ausblendbar über JS) === -->
+						<table class="plugin-config-table">
+						  <tbody>
+							<!-- Plugin aktiv -->
+							<tr>
+							  <td class="label"><!--$TXT_LABEL_PLUGIN_USE--></td>
+							  <td class="control">
+								<select name="PLUGIN_USE" id="PLUGIN_USE" data-role="slider" data-mini="true">
+								  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+								  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+								</select>
+							  </td>
+							</tr>
+						  </tbody>
+
+						  <!-- === Gesamter T2S-Bereich (ein-/ausblendbar) === -->
+						  <tbody class="t2s_block">
+							<!-- Text2Speech aktiv -->
+							<tr class="field_t2s">
+							  <td class="label"><!--$TXT_LABEL_T2S_USE--></td>
+							  <td class="control">
+								<select name="T2S_USE" id="T2S_USE" data-role="slider" data-mini="true">
+								  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+								  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+								</select>
+								<input type="hidden" id="T2S_INSTALLED" name="T2S_INSTALLED" value="<!--$T2S_INSTALLED-->">
+								<input type="hidden" id="t2s_bundle_exists" value="<!--$BUNDLE_EXISTS-->">
+								<input type="hidden" id="role_bridge" value="<!--$ROLE_BRIDGE-->">
+							  </td>
+							</tr>
+							<tr class="t2s_spacer">
+							  <td colspan="2" style="height:18px;"></td>
+							</tr>
+
+							<!-- Hinweis, wenn T2S nicht installiert -->
+							<tr class="field_t2s_not_installed" style="display:none;">
+							  <td colspan="2" style="color:#a00; font-style:italic;">
+								<!--$TXT_T2S_NOT_INSTALLED-->
+							  </td>
+							</tr>
+
+							<!-- Detail-Information -->
+							<tr class="t2s-mode-detail-row" style="display:none;">
+							  <td colspan="2"
+								  style="padding-top:0; font-size:0.9em; color:#555; line-height:1.4em;">
+								<!-- Dieser Container wird per JS dynamisch befüllt -->
+								<div class="t2s-mode-detail" style="font-weight:normal;"></div>
+
+								<!-- Optional: echtes Handshake-Datum zwischenspeichern -->
+								<input type="hidden" id="T2S_HANDSHAKE" name="T2S_HANDSHAKE" value="">
+							  </td>
+							</tr>
+						  </tbody>
+						</table>
+						<!-- **************************************** End of Added by OL ************************************ -->
                         </td>
                         <td align="center"><img src="/system/images/icons/<!--$psubfolder-->/icon_64.png"><br/><b><!--$MY_NAME--></b><br/><small><!--$PLUGIN_DESCRIPTION--></small>
-                        <table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>
+                        <table>
+						  <tr>
+							<td>
+							  <a style="width:300px;"
+								 id="btncancel"
+								 data-role="button"
+								 data-inline="true"
+								 data-mini="true"
+								 data-icon="delete"
+								 href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a>
+							</td>
+							<td>
+							  <a style="width:300px;"
+								 id="btnsavecfg"
+								 data-icon="check"
+								 data-role="button"
+								 data-mini="true"
+								 target="_self"
+								 onclick="CheckConfig(1,
+								   '<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>',
+								   '<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->'
+								 );">
+								 <!--$TXT_BTN_SAVE-->
+							  </a>
+							</td>
+						  </tr>
+						</table>
                         </td>
                         <td width="200px">
                           <table align="center" style="background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
@@ -57,11 +229,11 @@
                         <table class="formtable" width="100%">
                           <tr>
                             <td>
-                              <div style="cursor:default; id="vg_div">
+                              <div id="vg_div" style="cursor:default;">
                                 <fieldset id="vgs">
                                   <SCRIPT>
                                     vg_ids = new Array();
-                                    vg_ids.push($('#LAST_ID').val());</SCRIPT>
+                                    vg_ids.push($('#LAST_ID').val());
                                   </SCRIPT>
                                   <table class='formtable' id='formtable' style='width:100%; background: rgba(192,192,192, 0.2); border-radius: 5px; border: 1px solid #7e7e7e; padding: 0px'>
                                     <tr>
@@ -101,21 +273,21 @@
                                             <tr><td style=\'text-align:right; \'><nobr><!--$TXT_P2W_Text-->                      </nobr></td><td colspan=\'4\' width=\'100%\'><INPUT type=\'text\' name=\'P2W_Text'+new_vg_id+'\'                       id=\'P2W_Text'+new_vg_id+'\'                        value=\'<!--$P2W_Text-->\'                  </td></tr>                                                                \
                                             <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
                                               <td>                                                                           </td>                                                                                                                                                                                                                                                                                                \
-                                              <td style=\'width:100py;\'><nobr><!--$TXT_SIPCMD_CALLING_USER_NAME-->     </nobr></td>                                                                                                                                                                                                                                                                                              \
+                                              <td style=\'width:100px;\'><nobr><!--$TXT_SIPCMD_CALLING_USER_NAME-->     </nobr></td>                                                                                                                                                                                                                                                                                              \
                                               <td style=\'width:50px;\' ><nobr><!--$TXT_SIPCMD_CALLING_USER_NUMBER-->   </nobr></td>                                                                                                                                                                                                                                                                                              \
                                               <td style=\'width:150px;\'><nobr><!--$TXT_SIPCMD_CALLING_USER_PASSWORD--> </nobr></td>                                                                                                                                                                                                                                                                                              \
                                               <td style=\'width:100px;\'><nobr><!--$TXT_SIPCMD_SIP_PROXY-->             </nobr></td>                                                                                                                                                                                                                                                                                              \
                                             </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
                                             <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
                                               <td style=\'text-align:right;\'><nobr><!--$TXT_SIPCMD_CALLING_USER_ROW-->      </nobr></td>                                                                                                                                                                                                                                                                                         \
-                                              <td style=\'width:100py;\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLING_USER_NAME'+new_vg_id+'\'       id=\'SIPCMD_CALLING_USER_NAME'+new_vg_id+'\'        value=\'<!--$SIPCMD_CALLING_USER_NAME-->\'      </td>                                                                                                                                                 \
+                                              <td style=\'width:100px;\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLING_USER_NAME'+new_vg_id+'\'       id=\'SIPCMD_CALLING_USER_NAME'+new_vg_id+'\'        value=\'<!--$SIPCMD_CALLING_USER_NAME-->\'      </td>                                                                                                                                                 \
                                               <td style=\'width:50px;\' ><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLING_USER_NUMBER'+new_vg_id+'\'     id=\'SIPCMD_CALLING_USER_NUMBER'+new_vg_id+'\'      value=\'<!--$SIPCMD_CALLING_USER_NUMBER-->\'    </td>                                                                                                                                                 \
                                               <td style=\'width:150px;\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLING_USER_PASSWORD'+new_vg_id+'\'   id=\'SIPCMD_CALLING_USER_PASSWORD'+new_vg_id+'\'    value=\'<!--$SIPCMD_CALLING_USER_PASSWORD-->\'  </td>                                                                                                                                                 \
                                               <td style=\'width:100px;\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_SIP_PROXY'+new_vg_id+'\'               id=\'SIPCMD_SIP_PROXY'+new_vg_id+'\'                value=\'<!--$SIPCMD_SIP_PROXY-->\'              </td>                                                                                                                                                 \
                                             </tr>                                                                                                                                                                                                                                                                                                                                                                                 \
                                             <tr><td style=\'text-align:right; \'><nobr><!--$TXT_SIPCMD_CALLED_USER-->            </nobr></td><td colspan=\'4\' width=\'100%\'><INPUT spellcheck=\'false\' type=\'text\' name=\'SIPCMD_CALLED_USER'+new_vg_id+'\'             id=\'SIPCMD_CALLED_USER'+new_vg_id+'\'              value=\'<!--$SIPCMD_CALLED_USER-->\'                                     </td></tr>              \
                                             <tr>                                                                                                                                                                                                                                                                                                                                                                                  \
-                                              <td style=\'text-align:right; padding-top:30;\'><nobr><!--$TXT_SIPCMD_TIMES--></nobr>                                                                                                                                                                                                                                                                                                              \
+                                              <td style=\'text-align:right; padding-top:30px;\'><nobr><!--$TXT_SIPCMD_TIMES--></nobr>                                                                                                                                                                                                                                                                                                              \
                                               <td colspan=\'4\'>                                                                                                                                                                                                                                                                                                                                                                  \
                                                 <table>                                                                                                                                                                                                                                                                                                                                                                           \
                                                   <tr>                                                                                                                                                                                                                                                                                                                                                                            \
@@ -160,7 +332,8 @@
                             </td>
                           </tr>
                         </table>
-												<table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        <table>
+						<table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        
+						<table>
                           <tr>
                             <td width="550px">
                               <center>
@@ -170,8 +343,10 @@
                           </tr>
                         </table>
                       </div>
-                    </form>
+					  </form>
                   <script type="text/javascript">
+					var DEBUG = false;  // true = verbose console output
+				  
                     var at_least_one=0;
                     var firstrun=1;
                     function delete_vg(vg_id)
@@ -240,51 +415,70 @@
                           }
                         });
                     };
+					function InfoDialog(title, message)
+					{
+					  $('#dialog').html(message)
+						.prop('id', 'dialog')
+						.dialog({
+						  modal: true,
+						  title: title,
+						  zIndex: 10000,
+						  autoOpen: true,
+						  width: 'auto',
+						  resizable: false,
+						  buttons: {
+							"<!--$TXT_BTN_OK-->": function () {
+							  $(this).dialog("close");
+							}
+						  },
+						  close: function (event, ui) {
+							$(this).hide();
+						  }
+						});
+					}
+					
                     function CheckConfig(save,message,title)
-                    {
-                        $('#save_data').val('1');
-                        $('#dialog').html(message)
-                        .prop('id','dialog')
-                        .dialog(
-                        {
-                          modal: true, title: title, zIndex: 10000, autoOpen: true, resizable: true,
-                          dialogClass: 'fixedDialog',
-                          width: 'auto',
-                          height: 'auto',
-                          minWidth: '410',
-                          minHeight: '230',
-                          buttons:
-                          {
-                            '<!--$TXT_BTN_SAVE_CFG_DIALOG_CLOSE-->': function ()
-                            {
-                              $('#dialog').dialog("close");
-                            }
-                          },
-                          close: function (event, ui)
-                          {
-                            $(this).hide();
-                          },
-                          open: function (event, ui)
-                          {
+					{
+						$('#save_data').val('1');
 
-                          $('#dialog').html('<center><br/><br/><div class="spinner"><div class="rect1"></div><div class="rect2"></div><div class="rect3"></div><div class="rect4"></div></div><!--$TXT_PLEASE_WAIT--><br/><br/><br/>');
+						// 🔧 Unlock disabled fields so serializeArray() includes them
+						$('#main_form input:disabled, #main_form select:disabled, #main_form textarea:disabled')
+							.prop('disabled', false);
 
-                              $.ajax(
-                              {
-                                type: "POST",
-                                dataType: "text",
-                                url: "./index.cgi?do=check_config",
-                                data: $('#main_form').serializeArray(),
-                                cache: false,
-                                success: function(data)
-                                {
-                                  $('#dialog').html('<center><br/>'+data+'<br/><br/></center>');
-                                }
-                              }).fail(function() { $('#dialog').html('<center><br/><!--$TXT_SAVE_CFG_DIALOG_FAIL--><br/><br/></center>'); });
-                          }
-                        });
-                        $('.ui-button:contains("<!--$TXT_BTN_SAVE-->")').click()
-                    };
+						$('#dialog').html(message)
+						.prop('id','dialog')
+						.dialog({
+						  modal: true, title: title, zIndex: 10000, autoOpen: true, resizable: true,
+						  dialogClass: 'fixedDialog',
+						  width: 'auto', height: 'auto', minWidth: '410', minHeight: '230',
+						  buttons: {
+							'<!--$TXT_BTN_SAVE_CFG_DIALOG_CLOSE-->': function () {
+							  $('#dialog').dialog("close");
+							}
+						  },
+						  close: function (event, ui) { $(this).hide(); },
+						  open: function (event, ui) {
+
+							$('#dialog').html('<center><br/><br/><div class="spinner"><div class="rect1"></div><div class="rect2"></div><div class="rect3"></div><div class="rect4"></div></div><!--$TXT_PLEASE_WAIT--><br/><br/><br/>');
+
+							$.ajax({
+							  type: "POST",
+							  dataType: "text",
+							  url: "./index.cgi?do=check_config",
+							  data: $('#main_form').serializeArray(),
+							  cache: false,
+							  success: function(data) {
+								$('#dialog').html('<center><br/>'+data+'<br/><br/></center>');
+							  }
+							}).fail(function() {
+							  $('#dialog').html('<center><br/><!--$TXT_SAVE_CFG_DIALOG_FAIL--><br/><br/></center>');
+							});
+						  }
+						});
+
+						$('.ui-button:contains("<!--$TXT_BTN_SAVE-->")').click();
+					};
+
                     function play(vg_id_to_play)
                     {
                             $.ajax(
@@ -310,4 +504,295 @@
                               $('#call_result'+vg_id_to_play).fadeTo( "slow", 0 );
                           }, 5000);
                     }
-                  </script>
+					
+					/*
+					 * T2SPreCheck – Simple field show/hide messages for Text2SIP / Text2Speech
+					 * Compatible with jQuery Mobile
+					 */
+					function T2SPreCheck() {
+					  const val = ($('#T2S_USE').val() || '').toLowerCase();
+					  if (val !== 'on') return; // Nur prüfen, wenn User auf "ON" schaltet
+
+					  const t2sInstalled = ($('#T2S_INSTALLED').val() || '').toLowerCase() === 'true';
+					  const bundleExists = ($('#t2s_bundle_exists').val() || '').toLowerCase() === 'true';
+					  const isBridge     = ($('#role_bridge').val() || '').toLowerCase() === 'true';	
+					  
+					  if (DEBUG)   {
+						console.log("Bundle exists:", bundleExists);
+						console.log("T2S installed:", t2sInstalled);
+						console.log("Is in Bridge Mode:", isBridge);
+					  }
+
+					  // Bridge aktiv → nichts prüfen
+					  if (isBridge) return;
+					  
+					  // Wenn T2S installiert und keine Bridge → lokaler Master, keine Warnung
+					  if (t2sInstalled && !isBridge) {
+						  console.log("Local Master detected → no bundle check required.");
+						  return;
+					  }
+
+					  // Nur reagieren, wenn etwas fehlt
+					  if (!t2sInstalled || !bundleExists) {
+
+						// Fall ①: Kein T2S + kein Bundle → Popup INSTALL1 + 2
+						if (!t2sInstalled && !bundleExists) {
+						  const msg = `
+							<table cellpadding="10">
+							  <tr>
+								<td><img src="/plugins/text2sip/Text2SIP_fail.png"></td>
+								<td><!--$TXT_SIP_INSTALL1--><!--$TXT_SIP_INSTALL2--></td>
+							  </tr>
+							</table>`;
+						  InfoDialog('<!--$TXT_SIP_INSTALL5-->', msg);
+
+						  // Nach Schließen zurücksetzen
+						  $(document).one("dialogclose", ".ui-dialog", function() {
+							$("#T2S_USE").val("off");
+							try { $("#T2S_USE").slider("refresh"); } catch(e){}
+						  });
+						  return;
+						}
+
+						// Fall ②: T2S installiert + Bundle fehlt → Popup INSTALL4
+						if (t2sInstalled && !bundleExists) {
+						  const msg = `
+							<table cellpadding="10">
+							  <tr>
+								<td><img src="/plugins/text2sip/Text2SIP_fail.png"></td>
+								<td><!--$TXT_SIP_INSTALL4-->/opt/loxberry/config/plugins/text2sip/bridge/</td>
+							  </tr>
+							</table>`;
+						  InfoDialog('<!--$TXT_SIP_INSTALL5-->', msg);
+
+						  $(document).one("dialogclose", ".ui-dialog", function() {
+							$("#T2S_USE").val("off");
+							try { $("#T2S_USE").slider("refresh"); } catch(e){}
+						  });
+						  return;
+						}
+
+						// Fall ③: Kein T2S, aber Bundle da → keine Warnung (Bridge installierbar)
+						if (!t2sInstalled && bundleExists) {
+						  console.log("OK – T2S fehlt, aber Bundle vorhanden → Bridge kann installiert werden.");
+						  return;
+						}
+					  }
+					}
+
+					// Event anbinden
+					$(function() {
+					  $('#T2S_USE').on('slidestop change', T2SPreCheck);
+					});
+
+
+					/*
+					 * fieldControl.js – Simple field show/hide control for Text2SIP / Text2Speech
+					 * Compatible with jQuery Mobile
+					 */
+					function fieldControl() {
+					  // Werte lesen & normalisieren
+					  var pluginUse    = ($('#PLUGIN_USE').val() || '').toLowerCase();
+					  var t2sUse       = ($('#T2S_USE').val() || '').toLowerCase();
+					  var t2sInstalled = ($('#T2S_INSTALLED').val() || '').toLowerCase();
+					  if (t2sInstalled === '1') t2sInstalled = 'true';
+					  if (t2sInstalled === '0') t2sInstalled = 'false';
+					  
+					  if (DEBUG)   {
+						console.log("=== T2S DEBUG START ===");
+						console.log("PLUGIN_USE       =", $('#PLUGIN_USE').val());
+						console.log("T2S_USE          =", $('#T2S_USE').val());
+						console.log("T2S_INSTALLED    =", $('#T2S_INSTALLED').val());
+						console.log("t2s_bundle_exists=", $('#t2s_bundle_exists').val());
+						console.log("role_bridge      =", $('#role_bridge').val());
+						console.log("=== T2S DEBUG END ===");
+					  }
+
+					  // Plugin OFF → gesamten T2S-Block verbergen
+					  if (pluginUse !== 'on') {
+						$('.t2s_block').hide();
+						return;
+					  }
+
+					  // Plugin ON → gesamten T2S-Block zeigen
+					  $('.t2s_block').show();
+
+					  // === T2S-Logik ===
+					  if (t2sUse === 'on') {
+						if (t2sInstalled === 'true') {
+						  // → Lokaler Modus (normal installiert)
+						  $('.field_t2s_not_installed').hide();
+						  $('.t2s-mode-info').show();
+
+						  // Nur lokalen Hinweistext anzeigen
+						  const localTxt = "<!--$TXT_FIELD_HANDSHAKE_LOC-->";
+						  $(".t2s-mode-detail")
+							.empty()
+							.html(`<p style="margin:0;">${localTxt}</p>`)
+							.show();
+						  $(".t2s-mode-detail-row").show();
+
+						} else {
+						  // → Bridge-Modus
+						  $('.field_t2s_not_installed').show();
+						  $('.t2s-mode-info').show();
+
+						  // alten Inhalt leeren und Health abrufen
+						  $(".t2s-mode-detail").empty().show();
+						  loadT2SHealth();
+						}
+
+					  } else {
+						// → T2S deaktiviert
+						$('.field_t2s_not_installed').hide();
+						$('.t2s-mode-info').hide();
+						$('.t2s-mode-detail').hide();
+					  }
+
+					  // ==========================================
+					  // Sprachfelder (P2W_langX) sperren / freigeben
+					  // ==========================================
+					  lockLangPickerAll(t2sUse === "on");
+					}
+
+					/* ============================================================
+					 * P2W_lang Felder sperren/freigeben – kompatibel mit jQM & countrySelect
+					 * ============================================================ */
+					function lockLangPickerAll(lock){
+					  // --- jQM <select> (P2W_langX) ---
+					  $("select[id^='P2W_lang']").each(function(){
+						var $el = $(this);
+
+						// weiches visuelles Umschalten
+						if (lock) {
+						  $el.closest('tr, div').stop(true,true).fadeTo(300, 0.4);
+						} else {
+						  $el.closest('tr, div').stop(true,true).fadeTo(300, 1);
+						}
+
+						// Logik zum Sperren
+						if ($el.data("mobile-selectmenu")) {
+						  $el.selectmenu(lock ? "disable" : "enable").selectmenu("refresh");
+						} else {
+						  $el.prop("disabled", lock);
+						}
+					  });
+
+					  // --- countrySelect <input> (falls noch vorhanden) ---
+					  $("input[id^='P2W_lang']").each(function(){
+						var $inp  = $(this);
+						var $ui   = $inp.closest(".ui-input-text");
+						var $wrap = $inp.closest(".country-select");
+
+						// sanft aus-/einblenden
+						if (lock) {
+						  $wrap.stop(true,true).fadeTo(300, 0.4);
+						} else {
+						  $wrap.stop(true,true).fadeTo(300, 1);
+						}
+
+						$inp.prop("readonly", lock).prop("disabled", lock);
+						if (lock) { $inp.attr("tabindex","-1"); } else { $inp.removeAttr("tabindex"); }
+
+						if ($ui.length) $ui.toggleClass("ui-disabled ui-state-disabled", lock);
+
+						if ($wrap.length){
+						  if ($wrap.css("position")==="static") $wrap.css("position","relative");
+						  if (lock){
+							$wrap.find(".country-list:visible").hide();
+							if (!$wrap.find(".cs-blocker").length){
+							  $wrap.append('<div class="cs-blocker" style="position:absolute;inset:0;z-index:9999;background:transparent;cursor:not-allowed;"></div>');
+							}
+						  } else {
+							$wrap.find(".cs-blocker").remove();
+						  }
+						}
+					  });
+
+					  // Retry nach kurzem Delay (falls jQM Selects erst danach enhanced)
+					  clearTimeout(window.__p2wRetry);
+					  window.__p2wRetry = setTimeout(function(){
+						$("select[id^='P2W_lang']").each(function(){
+						  var $el = $(this);
+						  if ($el.data("mobile-selectmenu")){
+							$el.selectmenu(lock ? "disable" : "enable").selectmenu("refresh");
+						  }
+						});
+					  }, 300);
+
+					  console.log("P2W_lang Fields " + (lock ? "locked (faded out)" : "unlocked (faded in)"));
+					}
+
+
+					/* ============================================================
+					 * AJAX: Bridge Health Status
+					 * ============================================================ */
+					function loadT2SHealth() {
+					  $.ajax({
+						url: "index.cgi",
+						data: { do: "get_t2s_status" },
+						dataType: "json",
+						timeout: 3000,
+
+						success: function (data) {
+						  console.log("Health data:", data);
+						  var html = "";
+						  var txtTop = "";
+						  var txtBottom = "";
+
+						  if (data.mode === "bridge" && data.last) {
+							var ageSec = parseInt(data.age || 0);
+							var ageHrs = Math.floor(ageSec / 3600);
+							var ageText = data.last;
+
+							// Bewertung nach Zeit
+							if (ageHrs < 12) {
+							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT3-->";
+							} else if (ageHrs < 24) {
+							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT2-->";
+							} else {
+							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT1-->";
+							}
+							txtBottom = "<!--$TXT_FIELD_HANDSHAKE_EXT--> " + ageText;
+
+							html = `
+							  <p style="margin:0;">
+								${txtTop}<br>
+								<span style="font-weight:normal;">${txtBottom}</span>
+							  </p>
+							`;
+
+						  } else if (data.mode === "bridge") {
+							html = "<p><!--$TXT_FIELD_BRIDGE--></p>";
+						  } else {
+							html = "<p></p>";
+						  }
+
+						  $(".t2s-mode-detail").html(html).show();
+						  $(".t2s-mode-detail-row").show();
+						},
+
+						error: function (xhr, status, err) {
+						  console.warn("Failed to load T2S health:", status, err);
+						  $(".t2s-mode-detail")
+							.html("<p><!--$TXT_FIELD_BRIDGE_STATUS--></p>")
+							.show();
+						  $(".t2s-mode-detail-row").show();
+						},
+					  });
+					}
+
+					/* ============================================================
+					 * Initialisierung / Event-Bindings
+					 * ============================================================ */
+					$(document).on('pagecreate pageshow', function() {
+					  $('#PLUGIN_USE').val('<!--$PLUGIN_USE-->').slider('refresh');
+					  $('#T2S_USE').val('<!--$T2S_USE-->').slider('refresh');
+					  $('#T2S_INSTALLED').val('<!--$T2S_INSTALLED-->');
+
+					  // warte, bis alle Selects im DOM und enhanced sind
+					  setTimeout(fieldControl, 200);
+					});
+
+					$(document).on('change', '#PLUGIN_USE, #T2S_USE', fieldControl);
+					  </script>
