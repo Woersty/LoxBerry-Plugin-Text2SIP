@@ -53,6 +53,7 @@ then
     echo `date +"%b  %e %H:%M:%S "`"Copy of sipcmd for Architecture $arch successfully completed."                      2>&1 >>$logfile
     chown loxberry:loxberry REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd                                                            2>&1 >>$logfile
     chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd 2>&1 >>$logfile
+  fi
   # --- BEGIN: compat OpenLDAP 2.4 Einbindung (Bookworm/Bullseye) ---
   echo `date +"%b  %e %H:%M:%S "`"Preparing compat OpenLDAP 2.4 runtime for $arch." 2>&1 >>$logfile
 
