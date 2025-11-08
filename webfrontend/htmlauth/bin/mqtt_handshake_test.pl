@@ -37,7 +37,7 @@ my $TIMEOUT_SEC = 10;
 
 # ---------- Log- und Health-Dateien ----------
 my $ramdir      = '/run/shm/text2sip';
-my $stdlogdir   = 'REPLACELBHOMEDIR/log/plugins/text2sip';
+my $stdlogdir   = '/opt/loxberry/log/plugins/text2sip';
 my $LOGFILE     = "$ramdir/handshake_test.log";
 my $healthfile  = "$ramdir/health.json";
 my $ROLE_MARKER = '/etc/mosquitto/role/sip-bridge';
@@ -111,8 +111,25 @@ $mqtt->subscribe($RESP_TOPIC, sub {
     };
 });
 
-# Publish request
-eval { $mqtt->publish($REQ_TOPIC, $payload); };
+# Publish handshake (ensures no cached retain)
+eval {
+    # Clear old retained message first (harmless if none)
+    $mqtt->publish($REQ_TOPIC, "");
+
+    # Add small random jitter to avoid identical payloads being cached
+    my $json = encode_json({
+        client    => $CLIENT_ID,
+        timestamp => time,
+        hostname  => hostname(),
+        corr      => $corr,
+        nonce     => int(rand(1000000))  # <- prevents payload caching
+    });
+
+    # Now send actual handshake
+    $mqtt->publish($REQ_TOPIC, $json);
+};
+
+
 if ($@) {
     log_msg("<ERROR>", "Publish failed: $@");
     exit 1;
