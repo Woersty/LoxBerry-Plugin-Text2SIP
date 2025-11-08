@@ -223,12 +223,15 @@ system('sudo','install','-o','root','-g','root','-m','0755','-d', $DIS_DIR_SYS) 
 
 # Move ONLY LoxBerry default gateway files to disabled/
 for my $f (@LB_DEFAULT_CONFS) {
-  if (-e $f) {
-    my $base = File::Basename::basename($f);
-    my $dst  = File::Spec->catfile($DIS_DIR_SYS, $base);
-    system('sudo','mv','-f',$f,$dst) == 0
-      ? LOGOK("Moved $base to disabled/ (will be inactive).")
-      : LOGWARN("Could not move $base to disabled/: $!");
+  next unless (-e $f or -l $f);
+  my $base = File::Basename::basename($f);
+  my $dst  = File::Spec->catfile($DIS_DIR_SYS, $base);
+  LOGINF("Trying to move $base to disabled/ ...");
+  my $rc = system('sudo','mv','-f',$f,$dst);
+  if ($rc == 0) {
+    LOGOK("Moved $base to disabled/ (will be inactive).");
+  } else {
+    LOGFAIL("Failed to move $base (rc=$rc) — check sudoers or permissions.");
   }
 }
 
