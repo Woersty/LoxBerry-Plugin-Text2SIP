@@ -40,9 +40,9 @@ then
   mkdir wav
   chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
   chmod 755 wav                                                                                                                2>&1 >>$logfile
-  arch=`dpkg --print-architecture`                                                                                  2>&1 >>$logfile
+  arch=`dpkg --print-architecture` 2>&1 >>$logfile
   echo `date +"%b  %e %H:%M:%S "`"Systemarchitecture $arch recognized."                                                   2>&1 >>$logfile
-  cd $datafolder/$arch                                                                                  2>&1 >>$logfile
+  cd $datafolder/$arch 2>&1 >>$logfile
   if [ $? -ne 0 ]
   then
     echo `date +"%b  %e %H:%M:%S "`"ERROR: Path $arch not exists. That is bad!"                                         2>&1 >>$logfile
@@ -52,9 +52,7 @@ then
   then
     echo `date +"%b  %e %H:%M:%S "`"Copy of sipcmd for Architecture $arch successfully completed."                      2>&1 >>$logfile
     chown loxberry:loxberry REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd                                                            2>&1 >>$logfile
-    chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd 
-
-	2>&1 >>$logfile
+    chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd 2>&1 >>$logfile
   # --- BEGIN: compat OpenLDAP 2.4 Einbindung (Bookworm/Bullseye) ---
   echo `date +"%b  %e %H:%M:%S "`"Preparing compat OpenLDAP 2.4 runtime for $arch." 2>&1 >>$logfile
 
@@ -126,7 +124,7 @@ EOSIP
   then
     echo `date +"%b  %e %H:%M:%S "`"Copy of libraries successfully completed." 2>&1 >>$logfile
   else
-    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries  failed. That is bad!"  2>&1 >>$logfile
+    echo `date +"%b  %e %H:%M:%S "`"ERROR: Copy of libraries  failed. That is bad!" 2>&1 >>$logfile
   fi
   echo `date +"%b  %e %H:%M:%S "`"Try to install packages"                                                                     2>&1 >>$logfile
   dpkg -i libttspico-data_*                                                                                               2>&1 >>$logfile
@@ -156,7 +154,7 @@ EOSIP
 else
   echo `date +"%b  %e %H:%M:%S "`"modify.me not found. Plugin modification already done. Exit."
   echo `date +"%b  %e %H:%M:%S "`"Plugin modification already done."                                                           2>&1 >>$logfile
-  chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd                                     2>&1 >>$logfile
+  chmod 755 REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sipcmd 2>&1 >>$logfile
 fi
 chown loxberry:loxberry $logfile
 chmod 666 $logfile
