@@ -1,9 +1,13 @@
-SIP calls now work reliably on systems with Docker installed.
+Changelog:	
 
-Wrapper automatically isolates docker0 and restores it after each call.
-
-Compatible with all existing Text2SIP configurations.
-
-Logs clearly to /opt/loxberry/log/plugins/text2speech/Text2SIP.log.
-
-No need for manual ip link set docker0 down anymore.
+2025.11.08		Bullseye/Bookworm/Pi5 kompatibel (compat Dateien)
+				kann auch auf VM und VLAN installiert werden
+				volle Integration des Text2speech Plugins (7 verschiedene Text2speech Provider)
+				dadurch Multilinguallität in der Sprache
+				Kommunikation über MQTT
+				Sicherstellung eines SIP Calls auch bei installiertem Docker (IP-Binding)
+				Fallback Szenarien so dass gewährleistet ist das immer ein Anruf mit Ansage erfolgt
+				Performance Optimierungen
+				in 6 Sprachen verfügbar (DE, EN, FR, CZ, IT und NL)
+				kann auch dezentral installiert werden (z.B. auf einem zweiten Loxberry durch MQTT Bridging)
+				Logging verfeinert

@@ -73,9 +73,7 @@ our $ffmpeg  = '/usr/bin/ffmpeg';
 
 # T2S
 our ($T2S_INSTALLED,$T2S_USE,$T2SPlugFolder,$T2SminVers,$t2s_is_installed,$BUNDLE_PATH,$BUNDLE_EXISTS,$bundlename,$bundle_path,$role_bridge,$ROLE_BRIDGE,$bundle);
-our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile);
-our $req_topic  = 'tts-publish';
-our $resp_topic = 'tts-subscribe';
+our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile,$CLIENT_ID,$client);
 
 # Pfade/Jobs/Audio
 our ($logfile,$sipcmdlogfile,$pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$sipcmd,$cmd);
@@ -89,12 +87,16 @@ $T2S_INSTALLED  = "false";
 $T2S_USE        = "off";
 $T2SPlugFolder  = "Text-2-Speech";
 $T2SminVers     = "1.4.0";
+$CLIENT_ID   	= "t2s-bridge";
 $logfile 		= "Text2SIP.log";
 $bundlename 	= "t2s_bundle.tar.gz";
 $bundle_path 	= 'REPLACELBHOMEDIR/config/plugins/text2sip/bridge/' . $bundlename;
 $role_bridge 	= (-e '/etc/mosquitto/role/sip-bridge') ? 'true' : 'false';
 
-my $home = File::HomeDir->my_home;
+my $home 		= File::HomeDir->my_home;
+$CLIENT_ID   	= "t2s-bridge";
+my $hostname 	= lbhostname();
+$client			= $CLIENT_ID."-".$hostname;
 
 ##########################################################################
 # Read Settings
@@ -461,11 +463,44 @@ elsif ($do eq "get_t2s_status")
                 require File::Slurp;
                 require Time::Piece;
 
-                my $data = JSON::decode_json(File::Slurp::read_file($healthfile));
+                my $rawfile = File::Slurp::read_file($healthfile);
+                my $data    = JSON::decode_json($rawfile);
+
                 if ($data->{last_handshake}) {
-                    $result{last} = $data->{last_handshake};
-                    my $t = Time::Piece->strptime($data->{last_handshake}, '%Y-%m-%d %H:%M:%S');
-                    $result{age} = time - $t->epoch;
+
+                    my $raw = $data->{last_handshake};
+                    my $tp;
+
+                    # ---------------------------------------------------
+                    # 1. ISO 8601 Versuch: 2025-11-13T11:45:02+01:00
+                    # ---------------------------------------------------
+                    eval {
+                        $tp = Time::Piece->strptime($raw, '%Y-%m-%dT%H:%M:%S');
+                    };
+
+                    # ---------------------------------------------------
+                    # 2. Classic Format: 2025-11-13 11:45:02
+                    # ---------------------------------------------------
+                    if (!$tp) {
+                        eval {
+                            $tp = Time::Piece->strptime($raw, '%Y-%m-%d %H:%M:%S');
+                        };
+                    }
+
+                    # ---------------------------------------------------
+                    # 3. Format für UI
+                    # ---------------------------------------------------
+                    if ($tp) {
+                        # [YYYY-MM-DD] HH:MM:SS
+                        my $pretty = sprintf(
+                            '[%04d-%02d-%02d] %02d:%02d:%02d',
+                            $tp->year, $tp->mon, $tp->mday,
+                            $tp->hour, $tp->min, $tp->sec
+                        );
+
+                        $result{last} = $pretty;
+                        $result{age}  = time - $tp->epoch;
+                    }
                 }
             };
         }
@@ -475,7 +510,6 @@ elsif ($do eq "get_t2s_status")
     print JSON::encode_json(\%result);
     exit;
 }
-
 
   
   #--------------- Check config -----------------
@@ -590,6 +624,7 @@ elsif ($do eq "get_t2s_status")
 	  
 	  #**************************** Added by OL ***************************************
 	  $plugin_cfg->param('default.T2S_USE' ,"$T2S_USE" );
+	  $plugin_cfg->param('default.BRIDGE_USER' ,"$client" );
 	  #********************************************************************************
 	  
       $plugin_cfg->param('default.DEBUG_USE' ,"$DEBUG_USE" );
@@ -597,7 +632,7 @@ elsif ($do eq "get_t2s_status")
 	  my $version = LoxBerry::System::pluginversion();
 	  $plugin_cfg->param('default.INSTALLED_VERSION', $version);
 	  
-	  install_sip_bridge($T2S_INSTALLED, $T2S_USE);
+	  install_sip_bridge($T2S_INSTALLED, $T2S_USE, $client);
 	  	  
 		if ( $plugin_cfg->write($pluginconfigfile) ) {
 			print "\n<br/>" . $phraseplugin->param('TXT_SAVE_DIALOG_OK');
@@ -780,73 +815,110 @@ elsif ($do eq "get_t2s_status")
 
 sub t2svoice {
 
+    use Time::HiRes qw(time sleep);
+    use JSON qw(decode_json encode_json);
+
     our ($P2W_Text, $lbplogdir, $logfile, $psubfolder);
+
+    # ----------------------------------------------------------------------
+    # Safe defaults for logging
+    # ----------------------------------------------------------------------
     my $safe_logdir  = 'REPLACELBHOMEDIR/log/plugins/text2sip';
     my $safe_logfile = 'Text2SIP.log';
 
-    $lbplogdir  = ($lbplogdir  && -d $lbplogdir) ? $lbplogdir  : $safe_logdir;
+    $lbplogdir  = ($lbplogdir  && -d $lbplogdir)  ? $lbplogdir  : $safe_logdir;
     $logfile    = ($logfile    && $logfile ne '') ? $logfile    : $safe_logfile;
     $psubfolder = ($psubfolder && $psubfolder ne '') ? $psubfolder : 'text2sip';
 
-    my $log_path = "$lbplogdir/$logfile";
+    my $log_path     = "$lbplogdir/$logfile";
     my $RESP_TIMEOUT = 12;
 
     my $log = sub {
         my ($msg) = @_;
-        open my $fh, '>>', $log_path or return;
-        print $fh _ts() . " $msg\n";
-        close $fh;
+        if (open my $fh, '>>', $log_path) {
+            print $fh _ts() . " $msg\n";
+            close $fh;
+        }
     };
 
-    my $client = $psubfolder;
-    my $corr = eval { chomp(my $u = `uuidgen`); $u || time } || time;
-    my $req_topic  = "tts-publish/$client/$corr";
-    my $resp_topic = "tts-subscribe/$client/$corr";
-    $log->("## Corr-ID: $corr (req_topic=$req_topic, resp_topic=$resp_topic)");
+    $log->("################################ Start TTS Preparation ################################");
 
+    # ----------------------------------------------------------------------
+    # 1) Basic TTS parameters / sanity checks
+    # ----------------------------------------------------------------------
+    our $client;
+    $client //= "t2s-bridge-unknown";
+
+    my $req_topic  = "tts-publish/$client";
+    my $resp_topic = "tts-subscribe/$client";
+
+    $log->("## Using client='$client'");
+    $log->("## Request topic  = $req_topic");
+    $log->("## Response topic = $resp_topic");
+
+    # Ensure text exists, otherwise Pico fallback
     $P2W_Text //= '';
-    $P2W_Text =~ s/\R//g;
+    $P2W_Text =~ s/\R//g;   # remove newlines
+
     if ($P2W_Text eq '') {
         $log->("## Empty TTS text – using Pico fallback");
         return usepico();
     }
 
+    # ----------------------------------------------------------------------
+    # 2) Build payload (NO corr ANYMORE)
+    # ----------------------------------------------------------------------
     my $payload_json = encode_json({
         text     => "$P2W_Text",
         nocache  => 0,
         logging  => 1,
         mp3files => 0,
         client   => $client,
-        corr     => "$corr",
         reply_to => $resp_topic,
     });
 
-    # ============================================================
-    # Parse Response  → prüft explizit "status:error"
-    # ============================================================
+    $log->("## T2S payload prepared (without corr)");
+
+    # ----------------------------------------------------------------------
+    # 3) Response parser (generic, no corr matching)
+    # ----------------------------------------------------------------------
     my $parse_response = sub {
         my ($msg) = @_;
+
         my $d = eval { decode_json($msg) };
-        return undef unless $d;
+        if ($@ || !$d || ref $d ne 'HASH') {
+            $log->("## ERROR: Invalid JSON in T2S response: $@");
+            return undef;
+        }
+
         my $r = $d->{response} // $d;
 
-        # Fehlerstatus vom Subscriber → sofort abbrechen
+        # Master-level error
         if (defined $r->{status} && $r->{status} eq 'error') {
             my $err = $r->{message} // 'unknown error';
-            $log->("## MQTT response indicates error: $err");
+            $log->("## MQTT T2S returned ERROR: $err");
             our $t2s_abort_all = 1;
             return undef;
         }
 
-        # Erfolgreiche Antwort extrahieren
+        my $file = $r->{file};
+        my $http = $r->{interfaces}->{httpinterface} // $r->{httpinterface};
+
+        if (!$file || !$http) {
+            $log->("## ERROR: Incomplete T2S response (file/httpinterface missing)");
+            return undef;
+        }
+
         return {
-            file          => $r->{file},
-            httpinterface => $r->{interfaces}->{httpinterface} // $r->{httpinterface},
-            corr          => $r->{corr} // $r->{original}->{corr},
+            file          => $file,
+            httpinterface => $http,
         };
     };
 
-    $log->("## Using local MQTT broker");
+    # ----------------------------------------------------------------------
+    # 4) Connect to local MQTT broker (bridge → master)
+    # ----------------------------------------------------------------------
+    $log->("## Using local MQTT broker (will be bridged to master)");
 
     my ($host, $port, $user, $pass) = do {
         my $cred = LoxBerry::IO::mqtt_connectiondetails();
@@ -854,69 +926,96 @@ sub t2svoice {
             $cred->{brokerhost} // '127.0.0.1',
             $cred->{brokerport} // 1883,
             $cred->{brokeruser} // '',
-            $cred->{brokerpass} // ''
-        )
+            $cred->{brokerpass} // '',
+        );
     };
 
     $ENV{MQTT_SIMPLE_ALLOW_INSECURE_LOGIN} = 1;
+
     my $mqtt;
     eval {
         $mqtt = Net::MQTT::Simple->new("$host:$port");
         $mqtt->login($user, $pass) if $user || $pass;
         1;
+    } or do {
+        $log->("## MQTT connect/login failed – using Pico fallback");
+        return usepico();
     };
 
-    if ($mqtt) {
-        my ($reply);
-        $mqtt->subscribe("tts-subscribe/#" => sub {
-            my ($t, $m) = @_;
-            my $parsed = $parse_response->($m);
-            # Wenn Fehler gemeldet wurde → sofort abbrechen
-            if (our $t2s_abort_all && $t2s_abort_all == 1) {
-                $log->("## MQTT subscriber returned error – aborting completely");
-				$mqtt->disconnect();
-				job_log_end();
-                exit 0;   # sofortiger sauberer Exit ohne Fallback
-            }
-            return unless $parsed;
-            if ($parsed->{corr} && $parsed->{corr} eq $corr) {
-                $reply = $parsed;
-            }
-        });
-
-        $mqtt->publish($req_topic, $payload_json);
-
-        my $end = time + $RESP_TIMEOUT;
-        while (!$reply && time < $end) {
-            if (our $t2s_abort_all && $t2s_abort_all == 1) {
-                $log->("## MQTT subscriber returned error – aborting completely");
-                $mqtt->disconnect();
-                exit 0;  # sauberer Exit ohne Fallback
-            }
-            $mqtt->tick();
-            select undef, undef, undef, 0.1;
-        }
-        $mqtt->disconnect();
-
-        if ($reply && $reply->{file} && $reply->{httpinterface}) {
-            my $url = "$reply->{httpinterface}/$reply->{file}";
-            $log->("## T2S MQTT local OK: $url");
-            our $full_path_to_mp3 = $url;
-            return usetts();
-        } else {
-            # Nur Fallback, wenn kein Fehler gemeldet wurde
-            if (!(our $t2s_abort_all) || $t2s_abort_all != 1) {
-                $log->("## No matching MQTT response received – using fallback");
-                return usepico();
-            } else {
-                $log->("## MQTT subscriber returned error – no Pico, no Call");
-                return; # stiller Exit
-            }
-        }
-    } else {
-        $log->("## MQTT connect/login failed – using fallback");
+    if (!$mqtt) {
+        $log->("## MQTT object not created – using Pico fallback");
         return usepico();
     }
+
+    # ----------------------------------------------------------------------
+    # 5) Subscribe to response topic
+    # ----------------------------------------------------------------------
+    my $reply;
+
+    $mqtt->subscribe($resp_topic => sub {
+        my ($t, $m) = @_;
+
+        my $parsed = $parse_response->($m);
+
+        # Hard abort from master error → NO EXIT → fallback!
+        if (our $t2s_abort_all && $t2s_abort_all == 1) {
+            $log->("## MQTT subscriber reported error – will fallback to Pico");
+            return;
+        }
+
+        return unless $parsed;
+
+        # NO corr matching anymore – first valid response wins
+        $reply = $parsed;
+    });
+
+    # ----------------------------------------------------------------------
+    # 6) Small delay to ensure subscription is active
+    # ----------------------------------------------------------------------
+    select undef, undef, undef, 0.080;  # 80 ms
+
+    # ----------------------------------------------------------------------
+    # 7) Publish T2S request
+    # ----------------------------------------------------------------------
+    $log->("## Publishing T2S request to $req_topic via $host:$port");
+    $mqtt->publish($req_topic, $payload_json);
+
+    # ----------------------------------------------------------------------
+    # 8) Wait for response (or timeout) — NO ABORT ANYMORE
+    # ----------------------------------------------------------------------
+    my $end = time + $RESP_TIMEOUT;
+
+    while (!$reply && time < $end) {
+
+        # Master signaled error → break → fallback allowed
+        if (our $t2s_abort_all && $t2s_abort_all == 1) {
+            $log->("## MQTT subscriber reported error – stopping wait-loop");
+            last;   # Kein exit!
+        }
+
+        $mqtt->tick();
+        select undef, undef, undef, 0.05;
+    }
+
+    $mqtt->disconnect();
+
+    # ----------------------------------------------------------------------
+    # 9) Success → use TTS file
+    # ----------------------------------------------------------------------
+    if ($reply && $reply->{file} && $reply->{httpinterface}) {
+
+        my $url = "$reply->{httpinterface}/$reply->{file}";
+        $log->("## T2S MQTT OK: $url");
+
+        our $full_path_to_mp3 = $url;
+        return usetts();
+    }
+
+    # ----------------------------------------------------------------------
+    # 10) Fallbacks (ALL POSSIBLE ERRORS)
+    # ----------------------------------------------------------------------
+    $log->("## No valid MQTT response – using Pico fallback");
+    return usepico();
 }
 
 
@@ -1171,7 +1270,7 @@ sub usetts
 # ==========================================================
 
 sub install_sip_bridge {
-    my ($T2S_INSTALLED, $T2S_USE) = @_;
+    my ($T2S_INSTALLED, $T2S_USE, $client) = @_;
 
     # Globale Variablen aus Header
     our ($bundle_path, $bundlename);
@@ -1179,14 +1278,25 @@ sub install_sip_bridge {
     my $installer = 'REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/install_sip_client.pl';
     my $logfile   = 'REPLACELBHOMEDIR/log/plugins/text2sip/client_install.log';
 
-    # Nur starten, wenn Voraussetzungen erfüllt sind
-    return unless ($T2S_USE // '') =~ /^(?:1|on|true|yes)$/i;     # Bridge aktiviert
-    return unless ($T2S_INSTALLED // '') =~ /^(?:0|off|false|no)$/i;  # T2S noch nicht installiert
-    return unless -r $bundle_path && -f $installer;               # Bundle und Installer vorhanden
+    # Bridge enabled?
+    return unless ($T2S_USE // '') =~ /^(?:1|on|true|yes)$/i;
 
-    # Installer ausführen (alle Ausgaben in das bestehende client_install.log)
-    system("$^X '$installer' --bundle '$bundle_path' >>'$logfile' 2>&1");
+    # T2S Master NOT installed on SIP client
+    return unless ($T2S_INSTALLED // '') =~ /^(?:0|off|false|no)$/i;
+
+    # Bundle + installer present
+    return unless -r $bundle_path && -f $installer;
+
+    # Installer starten mit --user Übergabe
+    system("$^X '$installer' --bundle '$bundle_path' --user '$client' >>'$logfile' 2>&1");
+
+    # Kurze Pause, dann optional user-sync (praktisch nicht mehr nötig)
+    sleep 2;
+
+    # Optional (Safe-Double-Check): sync_script bleibt drin, macht aber i. d. R. nichts mehr
+    system("REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sync_bridge_user.pl >> /dev/shm/handshake_test.log 2>&1");
 }
+
 
 
 #####################################################

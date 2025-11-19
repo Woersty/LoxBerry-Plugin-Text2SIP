@@ -1,18 +1,54 @@
 #!/bin/bash
 
-# This is a sample cron file. According to it's name it will go to
-# ~/system/cron/cron.hourly. You may also let your Pluginscript create a
-# symbolic link dynamically in ~/system/cron/cron.10min which links to your
-# cron-script instead (which is prefered). Use NAME from
-# /data/system/plugindatabase.dat in that case as scriptname! Otherwise the
-# cron script will not be uninstalled cleanly.
+# Cron job for SIP Bridge handshake test
+# Runs ONLY if:
+#   - /etc/mosquitto/role/sip-bridge exists  (bridge installed)
+#   - PLUGIN_USE=on|ON|1   in [default]
+#   - T2S_USE=on|ON|1      in [default]
 
-# Will be executed as user "loxberry".
 MAILTO=""
 
 ROLE_MARKER="/etc/mosquitto/role/sip-bridge"
 HANDSHAKE="REPLACELBPHTMLAUTHDIR/bin/mqtt_handshake_test.pl"
+CFG="REPLACELBPCONFIGDIR/Text2SIP.cfg"
 
-if [ -e "$ROLE_MARKER" ]; then
-  "$HANDSHAKE" --quiet
+# --- Abort if no SIP bridge installed (Local Mode) ---
+if [ ! -e "$ROLE_MARKER" ]; then
+  exit 0
 fi
+
+# --- Extract only the [default] block ---
+DEFAULT_BLOCK=$(awk '
+  $0 ~ /^\[default\]/ { in_default=1; next }
+  $0 ~ /^\[/ && in_default==1 { in_default=0 }
+  in_default==1 { print }
+' "$CFG")
+
+# --- Read values from default block ---
+PLUGIN_USE=$(echo "$DEFAULT_BLOCK" | sed -n 's/^PLUGIN_USE[[:space:]]*=[[:space:]]*\(.*\)$/\1/p')
+T2S_USE=$(echo "$DEFAULT_BLOCK" | sed -n 's/^T2S_USE[[:space:]]*=[[:space:]]*\(.*\)$/\1/p')
+
+# --- Normalize values to lowercase ---
+PLUGIN_USE=$(echo "$PLUGIN_USE" | tr '[:upper:]' '[:lower:]')
+T2S_USE=$(echo "$T2S_USE" | tr '[:upper:]' '[:lower:]')
+
+# --- Convert ON → 1 ---
+[ "$PLUGIN_USE" = "on" ] && PLUGIN_USE=1
+[ "$T2S_USE" = "on" ] && T2S_USE=1
+
+# --- Defaults if missing ---
+PLUGIN_USE=${PLUGIN_USE:-0}
+T2S_USE=${T2S_USE:-0}
+
+# --- Skip if plugin disabled ---
+if [ "$PLUGIN_USE" != "1" ]; then
+  exit 0
+fi
+
+# --- Skip if T2S disabled ---
+if [ "$T2S_USE" != "1" ]; then
+  exit 0
+fi
+
+# --- Execute handshake test ---
+"$HANDSHAKE" --quiet

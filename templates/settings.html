@@ -728,6 +728,7 @@
 					 * AJAX: Bridge Health Status
 					 * ============================================================ */
 					function loadT2SHealth() {
+
 					  $.ajax({
 						url: "index.cgi",
 						data: { do: "get_t2s_status" },
@@ -736,16 +737,29 @@
 
 						success: function (data) {
 						  console.log("Health data:", data);
+
 						  var html = "";
 						  var txtTop = "";
 						  var txtBottom = "";
 
-						  if (data.mode === "bridge" && data.last) {
-							var ageSec = parseInt(data.age || 0);
-							var ageHrs = Math.floor(ageSec / 3600);
-							var ageText = data.last;
+						  // Robust: beide Keys akzeptieren
+						  var last = data.last || data.last_handshake || null;
+						  var ageSec = parseInt(data.age || 0);
+						  var ageHrs = Math.floor(ageSec / 3600);
 
-							// Bewertung nach Zeit
+						  // -----------------------------------------------------
+						  // 1) Bridge aktiv, aber noch kein Handshake erfolgt
+						  // -----------------------------------------------------
+						  if (data.mode === "bridge" && data.first_run) {
+							html = "<p><!--$TXT_FIELD_BRIDGE_WAIT--></p>";
+
+						  // -----------------------------------------------------
+						  // 2) Bridge aktiv + Handshake vorhanden
+						  // -----------------------------------------------------
+						  } else if (data.mode === "bridge" && last) {
+
+							var ageText = last;
+
 							if (ageHrs < 12) {
 							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT3-->";
 							} else if (ageHrs < 24) {
@@ -753,6 +767,7 @@
 							} else {
 							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT1-->";
 							}
+
 							txtBottom = "<!--$TXT_FIELD_HANDSHAKE_EXT--> " + ageText;
 
 							html = `
@@ -762,8 +777,15 @@
 							  </p>
 							`;
 
+						  // -----------------------------------------------------
+						  // 3) Bridge aktiv, aber KEINE Healthdaten (Fehlerfall)
+						  // -----------------------------------------------------
 						  } else if (data.mode === "bridge") {
 							html = "<p><!--$TXT_FIELD_BRIDGE--></p>";
+
+						  // -----------------------------------------------------
+						  // 4) Local Mode (Nichts anzeigen)
+						  // -----------------------------------------------------
 						  } else {
 							html = "<p></p>";
 						  }
@@ -774,13 +796,17 @@
 
 						error: function (xhr, status, err) {
 						  console.warn("Failed to load T2S health:", status, err);
+
 						  $(".t2s-mode-detail")
 							.html("<p><!--$TXT_FIELD_BRIDGE_STATUS--></p>")
 							.show();
+
 						  $(".t2s-mode-detail-row").show();
-						},
+						}
 					  });
+
 					}
+
 
 					/* ============================================================
 					 * Initialisierung / Event-Bindings

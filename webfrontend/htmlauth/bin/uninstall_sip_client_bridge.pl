@@ -38,13 +38,13 @@ Behavior:
   - With --force:     FULL uninstall (remove everything)
 
 Logfile:
-  /opt/loxberry/log/plugins/text2sip/client_install.log
+  REPLACELBHOMEDIR/log/plugins/text2sip/client_install.log
 USAGE
     exit 0;
 }
 
 # ========= Logging =========
-my $logfile = '/opt/loxberry/log/plugins/text2sip/client_install.log';
+my $logfile = 'REPLACELBHOMEDIR/log/plugins/text2sip/client_install.log';
 open(my $logfh, '>>', $logfile) or die "Cannot open log file $logfile: $!";
 
 sub log_msg {
@@ -68,7 +68,7 @@ my $cert_folder      = '/etc/mosquitto/certs/sip-bridge';
 my $ca_file          = '/etc/mosquitto/ca/mosq-ca.crt';
 my $role_bridge      = '/etc/mosquitto/role/sip-bridge';
 my $role_t2s_master  = '/etc/mosquitto/role/t2s-master';
-my $mqtt_handler     = '/opt/loxberry/sbin/mqtt-handler.pl';
+my $mqtt_handler     = 'REPLACELBHOMEDIR/sbin/mqtt-handler.pl';
 my $hosts_file       = '/etc/hosts';
 
 # ========= Role detection =========
@@ -103,15 +103,19 @@ if (-e $bridge_conf) {
     log_info("Bridge config not found: $bridge_conf");
 }
 
-# ========= Step 1b: Remove local listener config (always) =========
-my $local_listener_conf = "$conf_d_dir/10-local-listener.conf";
-if (-e $local_listener_conf) {
-    unlink($local_listener_conf)
-        ? log_ok("Removed local listener config: $local_listener_conf")
-        : log_warn("Failed to remove $local_listener_conf: $!");
-} else {
-    log_info("Local listener config not found: $local_listener_conf");
-}
+# ========= Step 1b: Local listener config (obsolete) =========
+# NOTE: Since v1.3 the local listener (1883) is part of 30-bridge-t2s.conf.
+# The former 10-local-listener.conf is no longer used or deployed.
+#
+# my $local_listener_conf = "$conf_d_dir/10-local-listener.conf";
+# if (-e $local_listener_conf) {
+#     unlink($local_listener_conf)
+#         ? log_ok("Removed legacy listener config: $local_listener_conf")
+#         : log_warn("Failed to remove legacy $local_listener_conf: $!");
+# } else {
+#     log_info("Legacy local listener config not found (expected).");
+# }
+
 
 # ========= Step 2: Restore disabled configs =========
 if (-d $conf_d_disabled) {
