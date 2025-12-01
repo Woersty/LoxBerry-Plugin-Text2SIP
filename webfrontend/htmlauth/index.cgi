@@ -18,10 +18,12 @@
 # Modules
 ##########################################################################
 
+#!/usr/bin/perl
+
 use strict;
+use warnings;
 use utf8;
 binmode STDOUT, ":utf8";
-use warnings;
 no  strict 'refs';                           # nötig für ${$var}-Templateersetzung
 
 # CGI / Fehlerausgabe
@@ -29,7 +31,7 @@ use CGI qw/:standard -utf8/;                 # header(), param(), …
 use CGI::Carp qw(fatalsToBrowser);
 
 # LoxBerry
-use LoxBerry::System;
+use LoxBerry::System qw(is_enabled);
 use LoxBerry::Log;
 use LoxBerry::IO;
 
@@ -44,12 +46,13 @@ use File::Path qw(make_path);
 use Fcntl qw(:flock);
 use Fcntl qw(LOCK_EX LOCK_UN);
 use Time::HiRes qw(gettimeofday);
-use JSON;
 
 # Protokolle / Formate
 use JSON qw(decode_json encode_json);
 use Net::MQTT::Simple;
 use Encode qw(decode_utf8 encode_utf8);
+
+# Plugin-Libs
 use lib "$lbphtmlauthdir/lib";
 use Text2SIP::Popup qw(flash_popup);
 our @EXPORT_OK = qw(flash_popup confirm_popup);
@@ -64,120 +67,144 @@ our ($pluginconfigdir,$pluginconfigfile,@language_strings,$languagefile,$languag
 our ($namef,$value,%query);
 our ($DEBUG_USE,$PLUGIN_USE);
 our ($logfile,$log);
-our $HOST_IP = LoxBerry::System::get_localip();
-our $T2SPlugFolder = 'text2speech';  # exact folder name of T2S master
+our $HOST_IP        = LoxBerry::System::get_localip();
 our $wgetbin;
-our $POPUP = '';
+our $POPUP   = '';
 our $CONFIRM = '';
 our $ffmpeg  = '/usr/bin/ffmpeg';
 
-# T2S
-our ($T2S_INSTALLED,$T2S_USE,$T2SPlugFolder,$T2SminVers,$t2s_is_installed,$BUNDLE_PATH,$BUNDLE_EXISTS,$bundlename,$bundle_path,$role_bridge,$ROLE_BRIDGE,$bundle);
+# T2S / Bundle / MQTT
+our ($T2S_INSTALLED,$T2S_USE,$T2SminVers,$t2s_is_installed,
+     $BUNDLE_PATH,$BUNDLE_EXISTS,$bundlename,$bundle_path,$role_bridge,$ROLE_BRIDGE,$bundle);
 our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile,$CLIENT_ID,$client);
 
 # Pfade/Jobs/Audio
-our ($logfile,$sipcmdlogfile,$pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$sipcmd,$cmd);
+our ($sipcmdlogfile,$pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$sipcmd,$cmd);
 
-# ----------------------------------------------------------------------
-# Setup / Einlesen (wie zuvor, keine Logikänderung)
-# ----------------------------------------------------------------------
+##########################################################################
+# Setup / Einlesen
+##########################################################################
+
 $version        = "v2025.09.09";
 $do             = "form";
 $T2S_INSTALLED  = "false";
 $T2S_USE        = "off";
-$T2SPlugFolder  = "Text-2-Speech";
-$T2SminVers     = "1.4.0";
-$CLIENT_ID   	= "t2s-bridge";
-$logfile 		= "Text2SIP.log";
-$bundlename 	= "t2s_bundle.tar.gz";
-$bundle_path 	= 'REPLACELBHOMEDIR/config/plugins/text2sip/bridge/' . $bundlename;
-$role_bridge 	= (-e '/etc/mosquitto/role/sip-bridge') ? 'true' : 'false';
+$CLIENT_ID      = "t2s-bridge";
+$logfile        = "Text2SIP.log";
+$bundlename     = "t2s_bundle.tar.gz";
+$bundle_path    = 'REPLACELBHOMEDIR/config/plugins/text2sip/bridge/' . $bundlename;
+$role_bridge    = (-e '/etc/mosquitto/role/sip-bridge') ? 'true' : 'false';
 
-my $home 		= File::HomeDir->my_home;
-$CLIENT_ID   	= "t2s-bridge";
-my $hostname 	= lbhostname();
-$client			= $CLIENT_ID."-".$hostname;
+my $home        = File::HomeDir->my_home;
+my $hostname    = lbhostname();
+$client         = $CLIENT_ID."-".$hostname;
 
 ##########################################################################
 # Read Settings
 ##########################################################################
-  
-# read language
-#my $lblang = lblanguage();
 
-our $log		= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/". $logfile, append => 1 );
+# In welchem Plugin-Subfolder liegen wir?
+$psubfolder = abs_path($0);
+$psubfolder =~ s{.*/(.+)/[^/]+$}{$1};
 
-# Figure out in which subfolder we are installed
-  $psubfolder = abs_path($0);
-  $psubfolder =~ s/(.*)\/(.*)\/(.*)$/$2/g;
+# LoxBerry system config lesen
+$cfg           = Config::Simple->new("$home/config/system/general.cfg");
+$installfolder = $cfg->param("BASE.INSTALLFOLDER");
+$lang          = $cfg->param("BASE.LANG");
+$wgetbin       = $cfg->param("BINARIES.WGET");
 
-#Set directories + read LoxBerry config
-  $cfg              = new Config::Simple("$home/config/system/general.cfg");
-  $installfolder    = $cfg->param("BASE.INSTALLFOLDER");
-  $lang             = $cfg->param("BASE.LANG");
-  $wgetbin          = $cfg->param("BINARIES.WGET");
+# Pluginconfig-Pfade
+$pluginconfigdir  = "$home/config/plugins/$psubfolder";
+$pluginconfigfile = "$pluginconfigdir/Text2SIP.cfg";
 
+# Plugin-Dirs anlegen (falls nicht vorhanden)
+make_path("$installfolder/log/plugins/$psubfolder")      unless -d "$installfolder/log/plugins/$psubfolder";
+make_path("$installfolder/data/plugins/$psubfolder/wav") unless -d "$installfolder/data/plugins/$psubfolder/wav";
+make_path("$installfolder/tmp/plugins/$psubfolder")      unless -d "$installfolder/tmp/plugins/$psubfolder";
 
-#Set directories + read Plugin config
-  $pluginconfigdir  = "$home/config/plugins/$psubfolder";
-  $pluginconfigfile = "$pluginconfigdir/Text2SIP.cfg";
+# Binaries/Verzeichnisse
+$pico2wave     = "/usr/bin/pico2wave";
+$pluginbindir  = "$installfolder/webfrontend/htmlauth/plugins/$psubfolder/bin";
+$plugindatadir = "$installfolder/data/plugins/$psubfolder/wav";
+$plugintmpfile = "$installfolder/tmp/plugins/$psubfolder";
+$sipcmdlogfile = "$installfolder/log/plugins/$psubfolder/Text2SIP_sipcmd.log";
 
-  #Set directories + read Plugin config
-  $pluginconfigdir  = "$home/config/plugins/$psubfolder";
-    $namef =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-    $value =~ tr/+/ /;
-    $value =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-    $query{$namef} = $value;
-    our $sipcmdlogfile;
-    our $pluginjobfile;
-    our $pluginwavfile;
-    our $plugintmpfile;
-    our $pluginbindir;
-    our $plugindatadir;
-    our $pico2wave;
-    our $sox;
-    our $sipcmd;
-    our $cmd;
-    our $linefree;
-    # Set variables
-    $psubfolder       = abs_path($0);
-    $psubfolder       =~ s/(.*)\/(.*)\/(.*)$/$2/g;
+# Logfile einmal leeren
+system("echo -n '' > $sipcmdlogfile");
 
-    $pico2wave        = "/usr/bin/pico2wave";
-    $pluginbindir     = $installfolder."/webfrontend/htmlauth/plugins/".$psubfolder."/bin";
-    $plugindatadir    = $installfolder."/data/plugins/".$psubfolder."/wav"  ;
-   	mkdir $plugindatadir unless -d $plugindatadir; # Check if dir exists. If not create it.
-    $sipcmdlogfile    = $installfolder."/log/plugins/".$psubfolder."/Text2SIP_sipcmd.log";
-    mkdir "$installfolder/log/plugins/$psubfolder" unless -d "$installfolder/log/plugins/$psubfolder"; # Check if dir exists. If not create it.
-    system ("echo -n '' > $sipcmdlogfile");
-    sub get_temp_filename 
-    {
-      my ($suffix) = @_;
-      my $fh = File::Temp->new
-      (
+# Temp-Dateinamen-Helfer
+sub get_temp_filename {
+    my ($suffix) = @_;
+    my $fh = File::Temp->new(
         TEMPLATE => 'Text2SIP_XXXX',
-        DIR      => $installfolder."/data/plugins/".$psubfolder."/wav/",
+        DIR      => $plugindatadir,
         SUFFIX   => $suffix
-      );
-      return $fh->filename;
-    }
-    $pluginjobfile    = get_temp_filename('.job.tsp');
-    $pluginwavfile    = get_temp_filename('_wav');
-    $plugintmpfile    = get_temp_filename('.tmp.wav');
-    
-    #$sox              = "/usr/bin/sox";
-    $sipcmd           = $pluginbindir."/sipcmd";
-    $plugin_cfg       = new Config::Simple("$pluginconfigfile");
+    );
+    return $fh->filename;
+}
 
-  foreach (split(/&/,$ENV{'QUERY_STRING'}))
-  {
-    ($namef,$value) = split(/=/,$_,2);
-    $namef =~ tr/+/ /;
-    $namef =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-    $value =~ tr/+/ /;
-    $value =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-    $query{$namef} = $value;
-  }
+$pluginjobfile = get_temp_filename('.job.tsp');
+$pluginwavfile = get_temp_filename('_wav');
+$plugintmpfile = get_temp_filename('.tmp.wav');
+
+# SIP-Binary
+$sipcmd        = $pluginbindir . "/sipcmd";
+
+# Plugin-Config laden
+$plugin_cfg    = Config::Simple->new($pluginconfigfile);
+
+# --- Globales DEBUG_USE-Default aus Config ---
+my $debug_raw  = eval { $plugin_cfg->param('default.DEBUG_USE') } // 'off';
+$DEBUG_USE     = is_enabled($debug_raw) ? 'on' : 'off';
+
+# sauber normalisieren: immer 'on' oder 'off'
+if (!defined $DEBUG_USE || $DEBUG_USE ne 'on') {
+    $DEBUG_USE = 'off';
+}
+
+my $pluginlogdir = "$installfolder/log/plugins/$psubfolder";
+make_path($pluginlogdir) unless -d $pluginlogdir;
+
+# WICHTIG: auch das LoxBerry-Logdir sicherstellen
+if (defined $lbplogdir && $lbplogdir ne '') {
+    make_path($lbplogdir) unless -d $lbplogdir;
+}
+
+$log = LoxBerry::Log->new ( 
+	name => 'Text2SIP', 
+	filename => '$lbplogdir', 
+	append => 1
+);
+
+##########################################################################
+# QUERY_STRING robust parsen -> %query
+##########################################################################
+
+%query = ();
+
+if (defined $ENV{'QUERY_STRING'} && $ENV{'QUERY_STRING'} ne '') {
+    foreach my $pair (split(/&/, $ENV{'QUERY_STRING'})) {
+
+        my ($raw_name, $raw_value) = split(/=/, $pair, 2);
+
+        # kein Name -> ignorieren
+        next if not defined $raw_name or $raw_name eq '';
+
+        # Undef in leeren String wandeln
+        $raw_value //= '';
+
+        # URL-Decoding für Namen
+        $raw_name =~ tr/+/ /;
+        $raw_name =~ s/%([a-fA-F0-9]{2})/pack("C", hex($1))/eg;
+
+        # URL-Decoding für Wert
+        $raw_value =~ tr/+/ /;
+        $raw_value =~ s/%([a-fA-F0-9]{2})/pack("C", hex($1))/eg;
+
+        $query{$raw_name} = $raw_value;
+    }
+}
+
 
 
 # Set parameters coming in - get over post
@@ -217,8 +244,7 @@ our $log		= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/"
 	#**************************************** Added by OL (Bundle check + conditional SIP install) ************************************
 
 	# (1) Detect if Text2Speech (T2S) plugin is installed
-	my $T2SPlugFolder = 'text2speech';  # exact folder name of T2S master
-	my $T2SminVers    = '0.0.0';        # optional version check
+	$T2SminVers    = '1.6.0';        # optional version check
 
 	my @plugins = LoxBerry::System::get_plugins();
 	foreach my $plugin (@plugins) {
@@ -244,104 +270,252 @@ our $log		= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/"
 # Main program
 ##########################################################################
 
-  if ($do eq "makecall")
-  {
+##########################################################################
+# Main program
+##########################################################################
+
+if ($do eq "makecall")
+{
     print header(-type => 'text/plain', -charset => 'UTF-8');
-    our $check_result ="";
-    my $guide                           = int($query{'vg'});
-	$ENV{SDL_AUDIODRIVER} = 'dummy';  # verhindert ALSA-Init von ffplay/SDL
-    if ( $guide == 0 )
-    {
-      print ( $phraseplugin->param('TXT_JOB_QUEUED_INVALID_VGID') );
-      print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
-      exit;
+    our $check_result = "";
+    my $guide         = int($query{'vg'});
+
+    $ENV{SDL_AUDIODRIVER} = 'dummy';  # verhindert ALSA-Init von ffplay/SDL
+
+    # Optional: DEBUG_USE aus CGI überschreibt Config (z.B. TestSIP aus UI)
+    my $debug_param = param('DEBUG_USE');
+    if (defined $debug_param && $debug_param eq 'on') {
+        $DEBUG_USE = 'on';
     }
-    our $P2W_lang                       = "".param('P2W_lang'.$guide                      );
-    if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
-	my $raw_txt 						= "".param('P2W_Text'.$guide					  );
-	$P2W_Text   = defined $raw_txt ? $raw_txt : '';
-    our $SIPCMD_CALLING_USER_NUMBER     = "".param('SIPCMD_CALLING_USER_NUMBER'.$guide    );
-    our $SIPCMD_CALLING_USER_PASSWORD   = "".param('SIPCMD_CALLING_USER_PASSWORD'.$guide  );
-    our $SIPCMD_CALLING_USER_NAME       = "".param('SIPCMD_CALLING_USER_NAME'.$guide      );
-    our $SIPCMD_SIP_PROXY               = "".param('SIPCMD_SIP_PROXY'.$guide              );
-    our $SIPCMD_CALLED_USER             = "".param('SIPCMD_CALLED_USER'.$guide            );
-    our $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = "".param('SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$guide);
-    our $SIPCMD_CALL_PAUSE_AFTER_GUIDE  = "".param('SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$guide );
-    our $SIPCMD_CALL_RESULT_VI          = "".param('SIPCMD_CALL_RESULT_VI'.$guide         );
-    our $SIPCMD_CALL_TIMEOUT            = int(param('SIPCMD_CALL_TIMEOUT'.$guide          ));
-    our $SIPCMD_MSINFO                  = "".param('SIPCMD_MSINFO'.$guide                 );
-    our $SIPCMD_CONFIRMATION_DIGIT      = "".param('SIPCMD_CONFIRMATION_DIGIT'.$guide     );
-    if ($SIPCMD_CONFIRMATION_DIGIT =~ /[0-9\*\#]/ ) 
-    {
-    	$SIPCMD_CONFIRMATION_DIGIT = $SIPCMD_CONFIRMATION_DIGIT;
+
+    if ($guide == 0) {
+        print($phraseplugin->param('TXT_JOB_QUEUED_INVALID_VGID'));
+        print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
+        exit;
     }
-    else
-    {
-    	$SIPCMD_CONFIRMATION_DIGIT = "-";
+
+    # ---------------------------------------------------------
+    # Helper-Funktion – Config-Wert holen (neu + alt)
+    # ---------------------------------------------------------
+    my $cfg_get = sub {
+        my ($key, $fallback) = @_;
+        my $val;
+
+        # Neuer Stil: [default] + default.KEY$guide
+        eval { $val = $plugin_cfg->param("default.$key$guide"); };
+        if (!defined $val || $val eq '') {
+            # Alter Stil: KEY$guide
+            eval { $val = $plugin_cfg->param("$key$guide"); };
+        }
+        $val = $fallback if (!defined $val || $val eq '');
+        return $val;
     };
 
- 		my $unknown = "unbekannt";
-    if     ($P2W_lang eq "gb" ) { $P2W_lang = "en-GB"; $unknown = "unknown" }
-    elsif  ($P2W_lang eq "us" ) { $P2W_lang = "en-US"; $unknown = "unknown" }
-    elsif  ($P2W_lang eq "es" ) { $P2W_lang = "es-ES"; $unknown = "desconocido" }
-    elsif  ($P2W_lang eq "fr" ) { $P2W_lang = "fr-FR"; $unknown = "inconnu" }
-    elsif  ($P2W_lang eq "it" ) { $P2W_lang = "it-IT"; $unknown = "sconosciuto" }
-    elsif  ($P2W_lang eq "de" ) { $P2W_lang = "de-DE"; $unknown = "unbekannt" }
-    else 
-    { 
-      LOGERR "Error: Unknown language $P2W_lang - using german instead ";
-      $P2W_lang = "de-DE";
+    # ---------------------------------------------------------
+    # 1) Sprache + Text
+    #    - Wenn CGI-Parameter vorhanden → verwenden (TestSIP)
+    #    - sonst → aus Config lesen (Loxone / index.php)
+    # ---------------------------------------------------------
+
+    # Sprache
+    $P2W_lang = param('P2W_lang'.$guide);
+    if (!defined $P2W_lang || $P2W_lang eq '') {
+        $P2W_lang = $cfg_get->('P2W_lang', 'de');
     }
-    
-    if ( "$SIPCMD_MSINFO" ne "" )
-   	{
-   		my $msinfo = `$wgetbin -a  $lbplogdir."/".$logfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1|grep value|cut -d'"' -f4`;
-		  if ($? ne 0 ) 
-		  {
-		  	my $text = $phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo;
-		    `echo "$text " >> $lbplogdir."/".$logfile`;
-				$P2W_Text = $P2W_Text =~ s/##/${unknown}/gr; 
-		  } 
-		  else 
-		  {
-		  	my $text = $phraseplugin->param('TXT_SIPCMD_READ_MS_STATE')." ".$msinfo;
-	      `echo "$text " >>  $lbplogdir."/".$logfile`;
-		    $P2W_Text = $P2W_Text =~ s/##/$msinfo/gr; 
-		  }
+
+    # Text
+    my $raw_txt = param('P2W_Text'.$guide);
+    if (!defined $raw_txt || $raw_txt eq '') {
+        $raw_txt = $cfg_get->('P2W_Text', '');
     }
-		$P2W_Text = $P2W_Text =~ s/\n//gr; 
-    `echo "Text: $P2W_Text " >>  $lbplogdir."/".$logfile`;
-        
-    $cmd = 'echo "################################ Create job to '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
-    if ( $DEBUG_USE eq "on" ) { system ("echo '".$cmd."' >> $lbplogdir."/".$logfile"); }
+    $P2W_Text = defined $raw_txt ? $raw_txt : '';
+
+    # ---------------------------------------------------------
+    # 2) SIP-Parameter – gleiche Logik (Param > Config)
+    # ---------------------------------------------------------
+    our $SIPCMD_CALLING_USER_NUMBER = param('SIPCMD_CALLING_USER_NUMBER'.$guide);
+    if (!defined $SIPCMD_CALLING_USER_NUMBER || $SIPCMD_CALLING_USER_NUMBER eq '') {
+        $SIPCMD_CALLING_USER_NUMBER = $cfg_get->('SIPCMD_CALLING_USER_NUMBER', '');
+    }
+
+    our $SIPCMD_CALLING_USER_PASSWORD = param('SIPCMD_CALLING_USER_PASSWORD'.$guide);
+    if (!defined $SIPCMD_CALLING_USER_PASSWORD || $SIPCMD_CALLING_USER_PASSWORD eq '') {
+        $SIPCMD_CALLING_USER_PASSWORD = $cfg_get->('SIPCMD_CALLING_USER_PASSWORD', '');
+    }
+
+    our $SIPCMD_CALLING_USER_NAME = param('SIPCMD_CALLING_USER_NAME'.$guide);
+    if (!defined $SIPCMD_CALLING_USER_NAME || $SIPCMD_CALLING_USER_NAME eq '') {
+        $SIPCMD_CALLING_USER_NAME = $cfg_get->('SIPCMD_CALLING_USER_NAME', '');
+    }
+
+    our $SIPCMD_SIP_PROXY = param('SIPCMD_SIP_PROXY'.$guide);
+    if (!defined $SIPCMD_SIP_PROXY || $SIPCMD_SIP_PROXY eq '') {
+        $SIPCMD_SIP_PROXY = $cfg_get->('SIPCMD_SIP_PROXY', '');
+    }
+
+    our $SIPCMD_CALLED_USER = param('SIPCMD_CALLED_USER'.$guide);
+    if (!defined $SIPCMD_CALLED_USER || $SIPCMD_CALLED_USER eq '') {
+        $SIPCMD_CALLED_USER = $cfg_get->('SIPCMD_CALLED_USER', '');
+    }
+
+    our $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = param('SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$guide);
+    if (!defined $SIPCMD_CALL_PAUSE_BEFORE_GUIDE || $SIPCMD_CALL_PAUSE_BEFORE_GUIDE eq '') {
+        $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = $cfg_get->('SIPCMD_CALL_PAUSE_BEFORE_GUIDE', 100);
+    }
+    $SIPCMD_CALL_PAUSE_BEFORE_GUIDE = int($SIPCMD_CALL_PAUSE_BEFORE_GUIDE);
+
+    our $SIPCMD_CALL_PAUSE_AFTER_GUIDE = param('SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$guide);
+    if (!defined $SIPCMD_CALL_PAUSE_AFTER_GUIDE || $SIPCMD_CALL_PAUSE_AFTER_GUIDE eq '') {
+        $SIPCMD_CALL_PAUSE_AFTER_GUIDE = $cfg_get->('SIPCMD_CALL_PAUSE_AFTER_GUIDE', 5000);
+    }
+    $SIPCMD_CALL_PAUSE_AFTER_GUIDE = int($SIPCMD_CALL_PAUSE_AFTER_GUIDE);
+
+    our $SIPCMD_CALL_RESULT_VI = param('SIPCMD_CALL_RESULT_VI'.$guide);
+    if (!defined $SIPCMD_CALL_RESULT_VI) {
+        $SIPCMD_CALL_RESULT_VI = $cfg_get->('SIPCMD_CALL_RESULT_VI', '');
+    }
+
+    our $SIPCMD_CALL_TIMEOUT = param('SIPCMD_CALL_TIMEOUT'.$guide);
+    if (!defined $SIPCMD_CALL_TIMEOUT || $SIPCMD_CALL_TIMEOUT eq '') {
+        $SIPCMD_CALL_TIMEOUT = $cfg_get->('SIPCMD_CALL_TIMEOUT', 60);
+    }
+    $SIPCMD_CALL_TIMEOUT = int($SIPCMD_CALL_TIMEOUT);
+    $SIPCMD_CALL_TIMEOUT = 60 if ($SIPCMD_CALL_TIMEOUT < 1);
+
+    our $SIPCMD_MSINFO = param('SIPCMD_MSINFO'.$guide);
+    if (!defined $SIPCMD_MSINFO) {
+        $SIPCMD_MSINFO = $cfg_get->('SIPCMD_MSINFO', '');
+    }
+
+    our $SIPCMD_CONFIRMATION_DIGIT = param('SIPCMD_CONFIRMATION_DIGIT'.$guide);
+    if (!defined $SIPCMD_CONFIRMATION_DIGIT || $SIPCMD_CONFIRMATION_DIGIT eq '') {
+        $SIPCMD_CONFIRMATION_DIGIT = $cfg_get->('SIPCMD_CONFIRMATION_DIGIT', '-');
+    }
+    if ($SIPCMD_CONFIRMATION_DIGIT !~ /[0-9\*\#]/ ) {
+        $SIPCMD_CONFIRMATION_DIGIT = "-";
+    }
+
+    # ---------------------------------------------------------
+    # Sprache normalisieren
+    # ---------------------------------------------------------
+    my $unknown = "unbekannt";
+    if    ($P2W_lang eq "gb" ) { $P2W_lang = "en-GB"; $unknown = "unknown" }
+    elsif ($P2W_lang eq "us" ) { $P2W_lang = "en-US"; $unknown = "unknown" }
+    elsif ($P2W_lang eq "es" ) { $P2W_lang = "es-ES"; $unknown = "desconocido" }
+    elsif ($P2W_lang eq "fr" ) { $P2W_lang = "fr-FR"; $unknown = "inconnu" }
+    elsif ($P2W_lang eq "it" ) { $P2W_lang = "it-IT"; $unknown = "sconosciuto" }
+    elsif ($P2W_lang eq "de" ) { $P2W_lang = "de-DE"; $unknown = "unbekannt" }
+    else {
+        LOGERR "Error: Unknown language $P2W_lang - using german instead ";
+        $P2W_lang = "de-DE";
+    }
+
+    # ----------------------------------------------------------
+    # TTS-Parameter (&tts=...) aus QUERY_STRING
+    # ----------------------------------------------------------
+    my $tts_param = $query{'tts'} // '';
+    $tts_param =~ s/\r?\n/ /g;
+
+    # Merken, ob der ursprüngliche Text überhaupt ein "##" hatte
+    my $had_placeholder = ($P2W_Text =~ /##/) ? 1 : 0;
+
+    # ---------------------------------------------------------
+    # MSINFO + &tts-Handling
+    # Logik gemäß Doku + Fallback:
+    # - Wenn keine MSINFO-URL → &tts ersetzt ## (falls vorhanden)
+    # - Wenn MSINFO = "tts"   → &tts ersetzt ##
+    # - Wenn MSINFO-URL, aber kein Wert → &tts ersetzt ## oder unknown
+    # ---------------------------------------------------------
+    if (defined $SIPCMD_MSINFO && $SIPCMD_MSINFO ne '') {
+
+        if ($SIPCMD_MSINFO eq 'tts') {
+
+            # Spezieller Modus: immer &tts für ##
+            if ($P2W_Text =~ /##/) {
+                if ($tts_param ne '') {
+                    $P2W_Text =~ s/##/$tts_param/g;
+                } else {
+                    $P2W_Text =~ s/##/$unknown/g;
+                }
+            }
+
+        } else {
+            # Normale Miniserver-URL
+            my $msinfo = `$wgetbin -a $lbplogdir/$logfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1 | grep value | cut -d'"' -f4`;
+            chomp $msinfo;
+
+            if ($? ne 0 || $msinfo eq '') {
+                my $text = $phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo;
+                system("echo '$text' >> $lbplogdir/$logfile");
+
+                # Fallback: &tts oder unknown auf "##"
+                if ($P2W_Text =~ /##/) {
+                    if ($tts_param ne '') {
+                        $P2W_Text =~ s/##/$tts_param/g;
+                    } else {
+                        $P2W_Text =~ s/##/$unknown/g;
+                    }
+                }
+            } else {
+                # Erfolgreich vom Miniserver gelesen -> MS-Wert ersetzt ##
+                if ($P2W_Text =~ /##/) {
+                    $P2W_Text =~ s/##/$msinfo/g;
+                }
+            }
+        }
+
+    } else {
+
+        # Keine MSINFO-URL gesetzt → &tts darf direkt ## ersetzen
+        if ($tts_param ne '' && $P2W_Text =~ /##/) {
+            $P2W_Text =~ s/##/$tts_param/g;
+        }
+    }
+
+    # ---------------------------------------------------------
+    # Fallback: Kein "##" im Text, aber &tts/&tss wurde mitgegeben
+    # → TTS-Text am Ende anhängen
+    # ---------------------------------------------------------
+    if ($tts_param ne '' && !$had_placeholder) {
+        if ($P2W_Text ne '') {
+            $P2W_Text .= ' ' . $tts_param;
+        } else {
+            $P2W_Text = $tts_param;
+        }
+    }
+
+    # Zeilenumbrüche aus dem Text entfernen
+    $P2W_Text =~ s/\r?\n/ /g;
+
+    # Finalen Text loggen
+    system("echo 'Final TTS text (VG=$guide): $P2W_Text' >> $lbplogdir/$logfile");
+
+    # ---------------------------------------------------------
+    # TTS-Routing + sipcmd-Job – ab hier wie gehabt
+    # ---------------------------------------------------------
+
     $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$cmd."' >> $pluginjobfile");
-	
-	#**************************** TTS routing (CONFIG-ONLY) ****************************
-	# DO NOT read CGI param here. Always use saved plugin config.
-	my $cfg_flag = eval { $plugin_cfg->param('default.T2S_USE') } // 'off';
-	$cfg_flag = lc($cfg_flag // 'off'); $cfg_flag =~ s/^\s+|\s+$//g;
 
-	# Banner + Marker nur einmal
-	our $TTS_PREP_WRITTEN = 0;
-	if (!$TTS_PREP_WRITTEN) {
-		$TTS_PREP_WRITTEN = 1;
-		system('echo "################################ Start TTS Preparation ################################" >> ' .
-			   $lbplogdir . '/' . $logfile);
-	}
+    #**************************** TTS routing (CONFIG-ONLY) ****************************
+    my $cfg_flag = eval { $plugin_cfg->param('default.T2S_USE') } // 'off';
+    $cfg_flag = lc($cfg_flag // 'off'); $cfg_flag =~ s/^\s+|\s+$//g;
 
-	# Klarer Log, was passiert
-	my $ts_now = _ts();
-	system('echo "'.$ts_now.' ## T2S_USE (config): ' . $cfg_flag . '" >> ' . $lbplogdir . '/' . $logfile);
+    our $TTS_PREP_WRITTEN = 0;
+    if (!$TTS_PREP_WRITTEN) {
+        $TTS_PREP_WRITTEN = 1;
+        system('echo "################################ Start TTS Preparation ################################" >> ' .
+               $lbplogdir . '/' . $logfile);
+    }
 
-	# HARTE Marker vor/nach t2svoice, damit man es *immer* sieht
-	system('echo "'.$ts_now.' ## ROUTE: about to call t2svoice()" >> ' . $lbplogdir . '/' . $logfile) if $cfg_flag eq 'on';
+    my $ts_now = _ts();
+    system('echo "'.$ts_now.' ## T2S_USE (config): ' . $cfg_flag . '" >> ' . $lbplogdir . '/' . $logfile);
+    system('echo "'.$ts_now.' ## ROUTE: about to call t2svoice()" >> ' . $lbplogdir . '/' . $logfile) if $cfg_flag eq 'on';
 
-	if ($cfg_flag eq 'on') {
-        our $t2s_suppress_fallback = 0;   # << NEU: Standard = kein Suppress
+    if ($cfg_flag eq 'on') {
+        our $t2s_suppress_fallback = 0;   # Standard = kein Suppress
         &t2svoice();   # T2S (MQTT/mTLS oder lokal)
 
-        # Wenn t2svoice keine WAV erzeugt hat, Fallback (außer t2svoice möchte bewusst stumm bleiben)
         if ( !$t2s_suppress_fallback && ( !-e $pluginwavfile || -s $pluginwavfile <= 0 ) ) {
             system('echo "## ROUTE: t2svoice produced no WAV -> fallback to Pico" >> ' . $lbplogdir . '/' . $logfile);
             &usepico();
@@ -350,39 +524,33 @@ our $log		= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/"
         &usepico();    # Pico
     }
 
-	#************************** End TTS routing (CONFIG-ONLY) ***************************
+    #************************** End TTS routing (CONFIG-ONLY) ***************************
 
-    # --- WICHTIG: Full SIPCMD command *NACH* End TTS Preparation loggen ---
-    $DEBUG_USE                      = param('DEBUG_USE'                    );
-    if ( $DEBUG_USE ne "on" ) { $DEBUG_USE = "off" };
-    our $debug_value  ='2>/dev/null';
-    our $sipcmd_debug ='';
-    if ( $DEBUG_USE eq "on" )
-    {
-    	$sipcmd_debug = "-o $sipcmdlogfile";
-      $debug_value  = '2>&1';
+    our $debug_value  = '2>/dev/null';
+    our $sipcmd_debug = '';
+
+    if (defined $DEBUG_USE && $DEBUG_USE eq 'on') {
+        $sipcmd_debug = "-o $sipcmdlogfile";
+        $debug_value  = '2>&1';
     }
-    if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://")
-    {
-      $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$lbplogdir."/".$logfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$lbplogdir."/".$logfile.'; fi; fi; done ';     
-    } 
+
+    if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://") {
+        $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$lbplogdir."/".$logfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$lbplogdir."/".$logfile.'; fi; fi; done ';
+    }
+
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
-	
-    # 🟢 INSERT WRAPPER ACTIVATION HERE:
-	$ENV{'MASTER_IP'}          = $HOST_IP;
-	$ENV{'OPAL_INTERFACE'}     = $HOST_IP;
 
-	# Exclude docker0 + Docker default CIDR; also append concrete docker0 IP if present
-	$ENV{'OPAL_IFACE_EXCLUDE'} = 'docker0,172.16.0.0/12';
+    $ENV{'MASTER_IP'}      = $HOST_IP;
+    $ENV{'OPAL_INTERFACE'} = $HOST_IP;
 
-	my $docker_ip = `ip -4 addr show docker0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}'`;
-	chomp $docker_ip;
-	if ($docker_ip) {
-		$ENV{'OPAL_IFACE_EXCLUDE'} .= ",$docker_ip";
-	}
-	$sipcmd = $lbphtmlauthdir.'/bin/sipcall_wrapper.pl';
+    $ENV{'OPAL_IFACE_EXCLUDE'} = 'docker0,172.16.0.0/12';
+    my $docker_ip = `ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}' 2>/dev/null`;
+    chomp $docker_ip;
+    if ($docker_ip) {
+        $ENV{'OPAL_IFACE_EXCLUDE'} .= ",$docker_ip";
+    }
+    $sipcmd = $lbphtmlauthdir.'/bin/sipcall_wrapper.pl';
 
-    # Continue with the normal command construction
     $cmd = $sipcmd
           . ' -m "G.711*" ' . $sipcmd_debug
           . ' -T ' . $SIPCMD_CALL_TIMEOUT
@@ -399,16 +567,14 @@ our $log		= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/"
           . $debug_value
           . ' | tee -a ' . $lbplogdir . '/' . $logfile . $check_result;
 
-    # Immer loggen – und ZWAR NACH dem TTS-Footer:
     system ("echo ## Full SIPCMD command: '".$cmd."' >> $lbplogdir/$logfile");
 
-	# Erst jetzt: Start-Header in das Jobfile schreiben (damit Reihenfolge stimmt)
     my $job_hdr = 'echo "################################ Start job from '.$pluginjobfile.' @ $(date)" 2>&1 >>'.$lbplogdir.'/'.$logfile;
     system('echo ' . $job_hdr . ' >> ' . $pluginjobfile);
 
-	system ("chmod +x $sipcmd >> $pluginjobfile");
+    system ("chmod +x $sipcmd >> $pluginjobfile");
     system ("echo '".$cmd."' >> $pluginjobfile");
-    
+
     my $delmsg = 'echo "'._ts().' ## Deleting all files " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$delmsg."' >> $pluginjobfile");
     my $delcmd = 'rm '.$plugindatadir.'/* 2>&1 >>'.$lbplogdir."/".$logfile;
@@ -416,25 +582,22 @@ our $log		= LoxBerry::Log->new ( name => 'Text2SIP', filename => $lbplogdir ."/"
 
     system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$lbplogdir/$logfile");
     system ("tsp bash $pluginjobfile  2>&1 >>$lbplogdir/$logfile");
-    if ( $? eq "0" )
-    {
+    if ( $? eq "0" ) {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_failed' ).addClass( 'test2sip_job_ok' ); </script>\n";
-    }
-    else
-    {
+    } else {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_FAIL');
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
     }
-    
+
     my $catcmd = 'cat '.$sipcmdlogfile.' >>'.$lbplogdir."/".$logfile;
     system ("echo '".$catcmd."' >> $pluginjobfile");
-    
+
     my $job_end = 'echo "################################ End job from '.$pluginjobfile.' " 2>&1 >>'.$lbplogdir."/".$logfile;
     system ("echo '".$job_end."' >> $pluginjobfile");
     exit;
-  #--------------- Test -----------------	
-  }
+}
+
   elsif ( $do eq "test")
   {
     print header(-type => 'text/plain', -charset => 'UTF-8');
@@ -549,9 +712,9 @@ elsif ($do eq "get_t2s_status")
         }
         else
         { 
-          our $P2W_lang                       = "".param('P2W_lang'.$i                      );
+          $P2W_lang                       = "".param('P2W_lang'.$i                      );
           if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
-          our $P2W_Text                       = "".param('P2W_Text'.$i                      );
+          $P2W_Text                       = "".param('P2W_Text'.$i                      );
           if ($P2W_Text eq "" ) 
           {
             print "\n<span class='test2sip_job_failed'>".$phraseplugin->param('TXT_SAVE_DIALOG_FAIL')."</span>\n<br/><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_EMPTY')."<br/><span style='color:#0000FF; font-size: 16px; font-family:monospace;'>".substr($phraseplugin->param('TXT_P2W_Text'),0, -1)."</span><br/>".$phraseplugin->param('TXT_SAVE_CFG_DIALOG_FAIL_PARAM_VG')." <b><b>#$i</b></b>"; exit;
@@ -841,7 +1004,7 @@ sub t2svoice {
         }
     };
 
-    $log->("################################ Start TTS Preparation ################################");
+    #$log->("################################ Start TTS Preparation ################################");
 
     # ----------------------------------------------------------------------
     # 1) Basic TTS parameters / sanity checks
@@ -870,7 +1033,7 @@ sub t2svoice {
     # ----------------------------------------------------------------------
     my $payload_json = encode_json({
         text     => "$P2W_Text",
-        nocache  => 0,
+        nocache  => 1,
         logging  => 1,
         mp3files => 0,
         client   => $client,
@@ -902,7 +1065,7 @@ sub t2svoice {
         }
 
         my $file = $r->{file};
-        my $http = $r->{interfaces}->{httpinterface} // $r->{httpinterface};
+        my $http = $r->{interfaces}->{httphostinterface} // $r->{httpinterface};
 
         if (!$file || !$http) {
             $log->("## ERROR: Incomplete T2S response (file/httpinterface missing)");
@@ -1289,12 +1452,6 @@ sub install_sip_bridge {
 
     # Installer starten mit --user Übergabe
     system("$^X '$installer' --bundle '$bundle_path' --user '$client' >>'$logfile' 2>&1");
-
-    # Kurze Pause, dann optional user-sync (praktisch nicht mehr nötig)
-    sleep 2;
-
-    # Optional (Safe-Double-Check): sync_script bleibt drin, macht aber i. d. R. nichts mehr
-    system("REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/sync_bridge_user.pl >> /dev/shm/handshake_test.log 2>&1");
 }
 
 

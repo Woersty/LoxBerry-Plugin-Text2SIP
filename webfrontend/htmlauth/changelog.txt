@@ -11,3 +11,4 @@ Changelog:
 				in 6 Sprachen verfügbar (DE, EN, FR, CZ, IT und NL)
 				kann auch dezentral installiert werden (z.B. auf einem zweiten Loxberry durch MQTT Bridging)
 				Logging verfeinert
+2025.12.01		Fixed SIP Call from Loxone
