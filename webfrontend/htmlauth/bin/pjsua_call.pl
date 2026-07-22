@@ -128,7 +128,9 @@ sub fire_result {
     my $digit = shift;
     return if $o{result_url} eq '';
     system('wget','-q','-t','1','-T','10','-O','/dev/null', $o{result_url}.$digit);
-    logline("Result-URL: $o{result_url}$digit");
+    # Basic-Auth-Zugangsdaten (user:pass@host) im Log maskieren
+    (my $masked = $o{result_url}.$digit) =~ s{(https?://[^:/\@]+:)[^\@/]*(\@)}{${1}***${2}}i;
+    logline("Result-URL: $masked");
 }
 
 while (!$done) {

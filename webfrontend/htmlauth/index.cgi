@@ -556,6 +556,13 @@ if ($do eq "makecall")
     my $drv_debug = (defined $DEBUG_USE && $DEBUG_USE eq 'on') ? 1 : 0;
     my $disp      = defined $SIPCMD_CALLING_USER_NAME ? $SIPCMD_CALLING_USER_NAME : '';
 
+    # Die TTS-Kette erzeugt zwei Dateien: eine echte RIFF/WAVE ($wav_path, .wav)
+    # und ein headerloses RAW-s16le ($pluginwavfile, _wav) fuer sipcmds v-Kommando.
+    # pjsua braucht die echte WAV -> aus dem _wav-Namen ableiten (siehe usepico/t2svoice).
+    my $wav_for_pjsua = $pluginwavfile;
+    $wav_for_pjsua =~ s/_wav$/.wav/i;
+    $wav_for_pjsua = $pluginwavfile unless -e $wav_for_pjsua;  # Fallback (Diagnose im Log)
+
     # Argumente einzeln quoten. Das Passwort landet ausschliesslich im Jobfile
     # (fuer die Ausfuehrung noetig), NICHT im lesbaren Text2SIP.log.
     $cmd = join(' ',
@@ -567,7 +574,7 @@ if ($do eq "makecall")
         '--password='      . shell_quote($SIPCMD_CALLING_USER_PASSWORD),
         '--display='       . shell_quote($disp),
         '--called='        . shell_quote($SIPCMD_CALLED_USER),
-        '--wav='           . shell_quote($pluginwavfile),
+        '--wav='           . shell_quote($wav_for_pjsua),
         '--pause_before='  . int($SIPCMD_CALL_PAUSE_BEFORE_GUIDE),
         '--pause_after='   . int($SIPCMD_CALL_PAUSE_AFTER_GUIDE),
         '--timeout='       . int($SIPCMD_CALL_TIMEOUT),
@@ -592,7 +599,7 @@ if ($do eq "makecall")
         print $jf "echo \"################################ Start job from $pluginjobfile @ \$(date)\" >> $qlog\n";
         print $jf "chmod +x " . shell_quote($pjsua_bin) . " 2>/dev/null\n";
         print $jf $cmd . "\n";
-        print $jf "rm -f " . shell_quote($pluginwavfile) . " " . shell_quote($plugintmpfile) . " 2>/dev/null\n";
+        print $jf "rm -f " . shell_quote($pluginwavfile) . " " . shell_quote($wav_for_pjsua) . " " . shell_quote($plugintmpfile) . " 2>/dev/null\n";
         print $jf "echo \"################################ End job from $pluginjobfile\" >> $qlog\n";
         close $jf;
     } else {
