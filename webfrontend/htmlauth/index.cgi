@@ -540,61 +540,77 @@ if ($do eq "makecall")
 
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
 
-    $ENV{'MASTER_IP'}      = $HOST_IP;
-    $ENV{'OPAL_INTERFACE'} = $HOST_IP;
+    # (Frueherer docker0/OPAL_IFACE_EXCLUDE-Hack entfaellt: pjsua bindet direkt
+    #  per --bound-addr an $HOST_IP, waehlt also nie eine Docker-Bridge-IP.)
+    # ---------------------------------------------------------------
+    # pjsua-Anrufschicht (ersetzt sipcmd + sipcall_wrapper.pl).
+    # --bound-addr bindet an die LAN-IP -> kein docker0/OPAL-Hack noetig.
+    # Die WAV ($pluginwavfile) hat die gewaehlte TTS-Engine (pico2wave /
+    # Text2Speech-Plugin / Piper) bereits erzeugt; pjsua spielt sie NACH
+    # CONFIRMED ab. DTMF-/Bestaetigungs-/Result-URL-Logik: pjsua_call.pl.
+    # ---------------------------------------------------------------
+    my $arch      = `dpkg --print-architecture 2>/dev/null`;
+    chomp $arch;
+    my $pjsua_bin = "$pluginbindir/pjsua-$arch";
+    my $driver    = "$pluginbindir/pjsua_call.pl";
+    my $drv_debug = (defined $DEBUG_USE && $DEBUG_USE eq 'on') ? 1 : 0;
+    my $disp      = defined $SIPCMD_CALLING_USER_NAME ? $SIPCMD_CALLING_USER_NAME : '';
 
-    $ENV{'OPAL_IFACE_EXCLUDE'} = 'docker0,172.16.0.0/12';
-    my $docker_ip = `ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}' 2>/dev/null`;
-    chomp $docker_ip;
-    if ($docker_ip) {
-        $ENV{'OPAL_IFACE_EXCLUDE'} .= ",$docker_ip";
+    # Argumente einzeln quoten. Das Passwort landet ausschliesslich im Jobfile
+    # (fuer die Ausfuehrung noetig), NICHT im lesbaren Text2SIP.log.
+    $cmd = join(' ',
+        '/usr/bin/perl', shell_quote($driver),
+        '--bin='           . shell_quote($pjsua_bin),
+        '--bound='         . shell_quote($HOST_IP),
+        '--proxy='         . shell_quote($SIPCMD_SIP_PROXY),
+        '--user='          . shell_quote($SIPCMD_CALLING_USER_NUMBER),
+        '--password='      . shell_quote($SIPCMD_CALLING_USER_PASSWORD),
+        '--display='       . shell_quote($disp),
+        '--called='        . shell_quote($SIPCMD_CALLED_USER),
+        '--wav='           . shell_quote($pluginwavfile),
+        '--pause_before='  . int($SIPCMD_CALL_PAUSE_BEFORE_GUIDE),
+        '--pause_after='   . int($SIPCMD_CALL_PAUSE_AFTER_GUIDE),
+        '--timeout='       . int($SIPCMD_CALL_TIMEOUT),
+        '--confirm_digit=' . shell_quote($SIPCMD_CONFIRMATION_DIGIT),
+        '--result_url='    . shell_quote($SIPCMD_CALL_RESULT_VI),
+        '--log='           . shell_quote("$lbplogdir/$logfile"),
+        '--debug='         . $drv_debug,
+    );
+
+    # Maskierte Kommandozeile ins lesbare Log (Passwort nie im Klartext).
+    my $cmd_log = mask_secrets($cmd);
+    $cmd_log =~ s/(--password=)\S+/${1}***/g;
+    if (open my $lf, '>>:encoding(UTF-8)', "$lbplogdir/$logfile") {
+        print $lf _ts() . " ## pjsua call: $cmd_log\n";
+        close $lf;
     }
-    $sipcmd = $lbphtmlauthdir.'/bin/sipcall_wrapper.pl';
 
-    $cmd = $sipcmd
-          . ' -m "G.711*" ' . $sipcmd_debug
-          . ' -T ' . $SIPCMD_CALL_TIMEOUT
-          . ' -P sip'
-          . ' -u "' . $SIPCMD_CALLING_USER_NUMBER . '"'
-          . ' -c "' . $SIPCMD_CALLING_USER_PASSWORD . '"'
-          . ' -a "' . $SIPCMD_CALLING_USER_NAME . '"'
-          . ' -w "' . $SIPCMD_SIP_PROXY . '"'
-          . ' -x "c' . $SIPCMD_CALLED_USER
-          . ';w' . $SIPCMD_CALL_PAUSE_BEFORE_GUIDE
-          . ';v' . $pluginwavfile
-          . ';w' . $SIPCMD_CALL_PAUSE_AFTER_GUIDE
-          . ';h" '
-          . $debug_value
-          . ' | tee -a ' . $lbplogdir . '/' . $logfile . $check_result;
+    # Jobfile per Perl-I/O schreiben (kein shell-echo wegen Quoting der Argumente).
+    if (open my $jf, '>', $pluginjobfile) {
+        my $qlog = shell_quote("$lbplogdir/$logfile");
+        print $jf "#!/bin/bash\n";
+        print $jf "echo \"################################ Start job from $pluginjobfile @ \$(date)\" >> $qlog\n";
+        print $jf "chmod +x " . shell_quote($pjsua_bin) . " 2>/dev/null\n";
+        print $jf $cmd . "\n";
+        print $jf "rm -f " . shell_quote($pluginwavfile) . " " . shell_quote($plugintmpfile) . " 2>/dev/null\n";
+        print $jf "echo \"################################ End job from $pluginjobfile\" >> $qlog\n";
+        close $jf;
+    } else {
+        print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_FAIL');
+        print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
+        exit;
+    }
 
-    system ("echo ## Full SIPCMD command: '".$cmd."' >> $lbplogdir/$logfile");
-
-    my $job_hdr = 'echo "################################ Start job from '.$pluginjobfile.' @ $(date)" 2>&1 >>'.$lbplogdir.'/'.$logfile;
-    system('echo ' . $job_hdr . ' >> ' . $pluginjobfile);
-
-    system ("chmod +x $sipcmd >> $pluginjobfile");
-    system ("echo '".$cmd."' >> $pluginjobfile");
-
-    my $delmsg = 'echo "'._ts().' ## Deleting all files " 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$delmsg."' >> $pluginjobfile");
-    my $delcmd = 'rm '.$plugindatadir.'/* 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$delcmd."' >> $pluginjobfile");
-
+    # In die Task-Spooler-Queue stellen (CGI kehrt sofort zurueck; Anruf laeuft im Hintergrund).
     system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$lbplogdir/$logfile");
-    system ("tsp bash $pluginjobfile  2>&1 >>$lbplogdir/$logfile");
-    if ( $? eq "0" ) {
+    system("tsp bash $pluginjobfile >> $lbplogdir/$logfile 2>&1");
+    if ( $? == 0 ) {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_failed' ).addClass( 'test2sip_job_ok' ); </script>\n";
     } else {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_FAIL');
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
     }
-
-    my $catcmd = 'cat '.$sipcmdlogfile.' >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$catcmd."' >> $pluginjobfile");
-
-    my $job_end = 'echo "################################ End job from '.$pluginjobfile.' " 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$job_end."' >> $pluginjobfile");
     exit;
 }
 
