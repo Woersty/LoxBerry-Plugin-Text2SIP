@@ -553,6 +553,16 @@ if ($do eq "makecall")
     chomp $arch;
     my $pjsua_bin = "$pluginbindir/pjsua-$arch";
     my $driver    = "$pluginbindir/pjsua_call.pl";
+
+    # Ohne passendes Binary kaeme der Anruf ohne erkennbaren Grund nicht zustande.
+    if (! -e $pjsua_bin) {
+        my $m = "## ERROR: no pjsua binary for architecture '$arch' (expected $pjsua_bin)";
+        system('echo ' . shell_quote($m) . ' >> ' . shell_quote("$lbplogdir/$logfile"));
+        print "\n<span class='test2sip_job_failed'>"
+            . ($phraseplugin->param('TXT_JOB_QUEUED_FAIL') // 'Call failed')
+            . "</span>\n<br/>pjsua: $arch\n";
+        exit;
+    }
     my $drv_debug = (defined $DEBUG_USE && $DEBUG_USE eq 'on') ? 1 : 0;
     my $disp      = defined $SIPCMD_CALLING_USER_NAME ? $SIPCMD_CALLING_USER_NAME : '';
 
