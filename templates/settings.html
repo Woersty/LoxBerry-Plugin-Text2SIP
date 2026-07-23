@@ -1,4 +1,10 @@
 		<style>
+			/* Die obere Leiste soll nicht schmaler werden als der Ansagen-Block
+			   darunter. Dessen Mindestbreite ergibt sich aus Beschriftungen, die
+			   nicht umbrechen duerfen, ist also nicht fest berechenbar - dieser
+			   Wert liegt bewusst knapp darunter. */
+			.t2s-topbar { min-width: 1000px; }
+
 			/* Kopf-Buttons (Konfiguration/Protokolldatei) mittig im Rahmen –
 			   jQM-Block-Buttons zentrieren sich nur ueber margin:auto. */
 			#btnshwlog, #btndwllog, #btnemptylog, #btncfgexport, #btncfgimport {
@@ -10,8 +16,8 @@
 			   Gesamter Block
 			   =============================== */
 			.plugin-config-box {
-			  width: 480px;            /* Gesamtbreite des Blocks */
-			  max-width: 100%;
+			  width: 100%;             /* schrumpft mit, statt 480px zu erzwingen */
+			  max-width: 480px;        /* Gesamtbreite des Blocks */
 			  box-sizing: border-box;
 			}
 
@@ -115,7 +121,7 @@
                   <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/countrySelect.min.css">
                   <center>
                     <form autocomplete="off" method="post" data-ajax="false" name="main_form" id="main_form" action="./index.cgi">
-                    <table width="100%" style="background: rgba(255,255,192, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
+                    <table width="100%" class="t2s-topbar" style="background: rgba(255,255,192, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
                       <tr>
                         <td width="200px" valign="top">
 						<!-- **************************************** Added/changed by OL ************************************ -->
@@ -180,7 +186,7 @@
                         <table>
 						  <tr>
 							<td>
-							  <a style="width:300px;"
+							  <a style="width:180px;"
 								 id="btncancel"
 								 data-role="button"
 								 data-inline="true"
@@ -189,8 +195,9 @@
 								 href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a>
 							</td>
 							<td>
-							  <a style="width:300px;"
+							  <a style="width:180px;"
 								 id="btnsavecfg"
+									 data-inline="true"
 								 data-icon="check"
 								 data-role="button"
 								 data-mini="true"
@@ -206,7 +213,7 @@
 						</table>
                         </td>
                         <td width="200px" style="height:1px;">
-                          <table align="center" style="width:100%; height:100%; background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
+                          <table align="center" style="width:100%; min-width:200px; height:100%; background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
                             <tr>
                               <td align="center"><small><nobr><b><!--$TXT_BTN_BLOCK_CONFIG--></b></nobr></small></td>
                             </tr>
@@ -219,8 +226,8 @@
                             </tr>
                           </table>
                        </td>
-                        <td width="200px">
-                          <table align="center" style="width:100%; height:100%; background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
+                        <td width="200px" style="height:1px;">
+                          <table align="center" style="width:100%; min-width:200px; height:100%; background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
                             <tr>
                               <td align="center"><small><nobr><b><!--$TXT_BTN_BLOCK_LOG--></b></nobr></small></td>
                             </tr>
@@ -353,7 +360,7 @@
                             </td>
                           </tr>
                         </table>
-						<table><tr><td><a style="width:300px;" id="btncancelbottom" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfgbottom" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        
+						<table><tr><td><a style="width:180px;" id="btncancelbottom" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:180px;" id="btnsavecfgbottom" data-icon="check" data-role="button" data-inline="true" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        
 						<table>
                           <tr>
                             <td width="550px">
