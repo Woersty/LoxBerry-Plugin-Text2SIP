@@ -79,7 +79,7 @@ our ($T2S_INSTALLED,$T2S_USE,$T2SminVers,$t2s_is_installed,
 our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile,$CLIENT_ID,$client);
 
 # Pfade/Jobs/Audio
-our ($sipcmdlogfile,$pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$sipcmd,$cmd);
+our ($pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$cmd);
 
 ##########################################################################
 # Setup / Einlesen
@@ -127,10 +127,6 @@ $pico2wave     = "/usr/bin/pico2wave";
 $pluginbindir  = "$installfolder/webfrontend/htmlauth/plugins/$psubfolder/bin";
 $plugindatadir = "$installfolder/data/plugins/$psubfolder/wav";
 $plugintmpfile = "$installfolder/tmp/plugins/$psubfolder";
-$sipcmdlogfile = "$installfolder/log/plugins/$psubfolder/Text2SIP_sipcmd.log";
-
-# Logfile einmal leeren
-system("echo -n '' > $sipcmdlogfile");
 
 # Temp-Dateinamen-Helfer
 sub get_temp_filename {
@@ -146,9 +142,6 @@ sub get_temp_filename {
 $pluginjobfile = get_temp_filename('.job.tsp');
 $pluginwavfile = get_temp_filename('_wav');
 $plugintmpfile = get_temp_filename('.tmp.wav');
-
-# SIP-Binary
-$sipcmd        = $pluginbindir . "/sipcmd";
 
 # Plugin-Config laden
 $plugin_cfg    = Config::Simple->new($pluginconfigfile);
@@ -277,8 +270,7 @@ if (defined $ENV{'QUERY_STRING'} && $ENV{'QUERY_STRING'} ne '') {
 if ($do eq "makecall")
 {
     print header(-type => 'text/plain', -charset => 'UTF-8');
-    our $check_result = "";
-    my $guide         = int($query{'vg'});
+    my $guide = int($query{'vg'});
 
     $ENV{SDL_AUDIODRIVER} = 'dummy';  # verhindert ALSA-Init von ffplay/SDL
 
@@ -491,7 +483,7 @@ if ($do eq "makecall")
     system("echo 'Final TTS text (VG=$guide): $P2W_Text' >> $lbplogdir/$logfile");
 
     # ---------------------------------------------------------
-    # TTS-Routing + sipcmd-Job – ab hier wie gehabt
+    # TTS-Routing + Anruf-Job
     # ---------------------------------------------------------
 
     $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
@@ -525,18 +517,6 @@ if ($do eq "makecall")
     }
 
     #************************** End TTS routing (CONFIG-ONLY) ***************************
-
-    our $debug_value  = '2>/dev/null';
-    our $sipcmd_debug = '';
-
-    if (defined $DEBUG_USE && $DEBUG_USE eq 'on') {
-        $sipcmd_debug = "-o $sipcmdlogfile";
-        $debug_value  = '2>&1';
-    }
-
-    if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://") {
-        $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$lbplogdir."/".$logfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$lbplogdir."/".$logfile.'; fi; fi; done ';
-    }
 
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
 
