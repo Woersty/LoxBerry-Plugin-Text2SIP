@@ -422,6 +422,7 @@
                               $.get( "/plugins/<!--$psubfolder-->/?mode=empty_logfile", function( data )
                               {
                                 $('#dialog').html('<center><br/>'+data+'</center>');
+                                $('#dialog').closest('.ui-dialog').find('.ui-dialog-buttonpane').hide();
                                 setTimeout( function() { $('#dialog').dialog("close"); }, 2000);
                               }).fail(function() { $('#dialog').html('<center><br/><!--$TXT_EMPTY_LOG_DIALOG_AUTHENTICATE--></center>'); $(":button:contains('<!--$TXT_BTN_YES-->')").prop("disabled", '').removeClass("ui-state-disabled"); });
                             },
@@ -435,6 +436,9 @@
                             $(this).hide();
                           }
                         });
+                    /* Der Dialog wird wiederverwendet: Schaltflaechen bei jedem Oeffnen
+                       wieder einblenden, der Erfolgsfall blendet sie aus. */
+                    $('#dialog').closest('.ui-dialog').find('.ui-dialog-buttonpane').show();
                     };
 					function InfoDialog(title, message)
 					{
