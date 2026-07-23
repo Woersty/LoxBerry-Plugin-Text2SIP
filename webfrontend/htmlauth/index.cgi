@@ -128,6 +128,26 @@ $pluginbindir  = "$installfolder/webfrontend/htmlauth/plugins/$psubfolder/bin";
 $plugindatadir = "$installfolder/data/plugins/$psubfolder/wav";
 $plugintmpfile = "$installfolder/tmp/plugins/$psubfolder";
 
+# Kodier-Helfer. Config::Simple, Backticks und die Kommandozeile arbeiten mit
+# UTF-8-Bytes; CGI (-utf8) und die Sprachdateien liefern Zeichen. as_chars()
+# wandelt beim Hereinkommen, as_bytes() beim Hinausgehen. Beide sind idempotent.
+sub as_chars {
+    my $v = shift;
+    return '' unless defined $v;
+    return $v if utf8::is_utf8($v);
+    # Bestehende Konfigurationen koennen ISO-8859-1 enthalten, weil die
+    # Einstellungsseite den Wert bisher unkodiert zurueckschrieb. Strikt als
+    # UTF-8 versuchen, sonst als Latin-1 lesen statt Ersatzzeichen zu liefern.
+    my $decoded = eval { Encode::decode('UTF-8', $v, Encode::FB_CROAK) };
+    return defined $decoded ? $decoded : Encode::decode('ISO-8859-1', $v);
+}
+
+sub as_bytes {
+    my $v = shift;
+    return '' unless defined $v;
+    return utf8::is_utf8($v) ? encode_utf8($v) : $v;
+}
+
 # Temp-Dateinamen-Helfer
 sub get_temp_filename {
     my ($suffix) = @_;
@@ -324,7 +344,7 @@ if ($do eq "makecall")
 
     # Config und CGI liefern UTF-8-Bytes. Ab hier ist $P2W_Text ein Zeichen-String;
     # jede Ausgabe kodiert wieder nach UTF-8.
-    $P2W_Text = decode_utf8($P2W_Text) unless utf8::is_utf8($P2W_Text);
+    $P2W_Text = as_chars($P2W_Text);
 
     # ---------------------------------------------------------
     # 2) SIP-Parameter – gleiche Logik (Param > Config)
@@ -411,7 +431,7 @@ if ($do eq "makecall")
     # ----------------------------------------------------------
     my $tts_param = $query{'tts'} // '';
     $tts_param =~ s/\r?\n/ /g;
-    $tts_param = decode_utf8($tts_param) unless utf8::is_utf8($tts_param);
+    $tts_param = as_chars($tts_param);
 
     # Merken, ob der ursprüngliche Text überhaupt ein "##" hatte
     my $had_placeholder = ($P2W_Text =~ /##/) ? 1 : 0;
@@ -440,10 +460,10 @@ if ($do eq "makecall")
             # Normale Miniserver-URL
             my $msinfo = `$wgetbin -a $lbplogdir/$logfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1 | grep value | cut -d'"' -f4`;
             chomp $msinfo;
-            $msinfo = decode_utf8($msinfo) unless utf8::is_utf8($msinfo);
+            $msinfo = as_chars($msinfo);
 
             if ($? ne 0 || $msinfo eq '') {
-                my $text = encode_utf8($phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo);
+                my $text = as_bytes($phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo);
                 system("echo '$text' >> $lbplogdir/$logfile");
 
                 # Fallback: &tts oder unknown auf "##"
@@ -486,7 +506,7 @@ if ($do eq "makecall")
     $P2W_Text =~ s/\r?\n/ /g;
 
     # Finalen Text loggen
-    my $log_txt = encode_utf8($P2W_Text);
+    my $log_txt = as_bytes($P2W_Text);
     system("echo 'Final TTS text (VG=$guide): $log_txt' >> $lbplogdir/$logfile");
 
     # ---------------------------------------------------------
@@ -787,18 +807,18 @@ elsif ($do eq "get_t2s_status")
           	$SIPCMD_CONFIRMATION_DIGIT = "-";
           };
           $plugin_cfg->param('default.P2W_lang'.$i                      ,"$P2W_lang"                       );
-          $plugin_cfg->param('default.P2W_Text'.$i, $P2W_Text);
-          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$i    ,"$SIPCMD_CALLING_USER_NUMBER"     );
-          $plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$i  ,"$SIPCMD_CALLING_USER_PASSWORD"   );
-          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$i      ,"$SIPCMD_CALLING_USER_NAME"       );
-          $plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$i              ,"$SIPCMD_SIP_PROXY"               );
-          $plugin_cfg->param('default.SIPCMD_CALLED_USER'.$i            ,"$SIPCMD_CALLED_USER"             );
+          $plugin_cfg->param('default.P2W_Text'.$i, as_bytes($P2W_Text));
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$i    ,as_bytes($SIPCMD_CALLING_USER_NUMBER)     );
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$i  ,as_bytes($SIPCMD_CALLING_USER_PASSWORD)   );
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$i      ,as_bytes($SIPCMD_CALLING_USER_NAME)       );
+          $plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$i              ,as_bytes($SIPCMD_SIP_PROXY)               );
+          $plugin_cfg->param('default.SIPCMD_CALLED_USER'.$i            ,as_bytes($SIPCMD_CALLED_USER)             );
           $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i,"$SIPCMD_CALL_PAUSE_BEFORE_GUIDE" );
           $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i ,"$SIPCMD_CALL_PAUSE_AFTER_GUIDE"  );
-          $plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$i         ,"$SIPCMD_CALL_RESULT_VI"          );
+          $plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$i         ,as_bytes($SIPCMD_CALL_RESULT_VI)          );
           $plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$i           ,"$SIPCMD_CALL_TIMEOUT"            );
           $plugin_cfg->param('default.SIPCMD_CONFIRMATION_DIGIT'.$i     ,"$SIPCMD_CONFIRMATION_DIGIT"      );
-          $plugin_cfg->param('default.SIPCMD_MSINFO'.$i                 ,"$SIPCMD_MSINFO"                  );
+          $plugin_cfg->param('default.SIPCMD_MSINFO'.$i                 ,as_bytes($SIPCMD_MSINFO)                  );
         }
       }
 	  
@@ -941,17 +961,17 @@ elsif ($do eq "get_t2s_status")
                next; 
             }
             if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
-            $P2W_Text                       =  "".$plugin_cfg->param('default.P2W_Text'.$vg_id                          );
-            $SIPCMD_CALLING_USER_NUMBER     =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$vg_id        );
-            $SIPCMD_CALLING_USER_PASSWORD   =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$vg_id      );
-            $SIPCMD_CALLING_USER_NAME       =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$vg_id          );
-            $SIPCMD_SIP_PROXY               =  "".$plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$vg_id                  );
-            $SIPCMD_CALLED_USER             =  "".$plugin_cfg->param('default.SIPCMD_CALLED_USER'.$vg_id                );
+            $P2W_Text                       =  as_chars($plugin_cfg->param('default.P2W_Text'.$vg_id                          ));
+            $SIPCMD_CALLING_USER_NUMBER     =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$vg_id        ));
+            $SIPCMD_CALLING_USER_PASSWORD   =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$vg_id      ));
+            $SIPCMD_CALLING_USER_NAME       =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$vg_id          ));
+            $SIPCMD_SIP_PROXY               =  as_chars($plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$vg_id                  ));
+            $SIPCMD_CALLED_USER             =  as_chars($plugin_cfg->param('default.SIPCMD_CALLED_USER'.$vg_id                ));
             $SIPCMD_CALL_PAUSE_BEFORE_GUIDE =  int($plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$vg_id   ));
             $SIPCMD_CALL_PAUSE_AFTER_GUIDE  =  int($plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$vg_id    ));
-            $SIPCMD_CALL_RESULT_VI          =  "".$plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$vg_id             );
+            $SIPCMD_CALL_RESULT_VI          =  as_chars($plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$vg_id             ));
             $SIPCMD_CALL_TIMEOUT            =  int($plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$vg_id              ));
-            $SIPCMD_MSINFO                  =  "".$plugin_cfg->param('default.SIPCMD_MSINFO'.$vg_id                     );
+            $SIPCMD_MSINFO                  =  as_chars($plugin_cfg->param('default.SIPCMD_MSINFO'.$vg_id                     ));
             $SIPCMD_CONFIRMATION_DIGIT      =  "".$plugin_cfg->param('default.SIPCMD_CONFIRMATION_DIGIT'.$vg_id         );
             if ($SIPCMD_CONFIRMATION_DIGIT =~ /[0-9\*\#]/ ) 
             {
@@ -1244,7 +1264,7 @@ sub usepico
 
 	# --- 1) Pico: Text -> TMP-WAV ---
 	$job->("## Generating voice (pico2wave)");
-	my $text = encode_utf8($P2W_Text // '');
+	my $text = as_bytes($P2W_Text);
 
 	# stderr temporär ins Plugin-Log umleiten
 	open my $SAVEDERR, ">&", \*STDERR;
