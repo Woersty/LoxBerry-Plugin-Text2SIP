@@ -1,7 +1,7 @@
 		<style>
 			/* Kopf-Buttons (Konfiguration/Protokolldatei) mittig im Rahmen –
 			   jQM-Block-Buttons zentrieren sich nur ueber margin:auto. */
-			#btnshwlog, #btndwllog, #btncfgexport, #btncfgimport {
+			#btnshwlog, #btndwllog, #btnemptylog, #btncfgexport, #btncfgimport {
 			  margin-left: auto !important;
 			  margin-right: auto !important;
 			}
@@ -237,7 +237,7 @@
                                 <script type="text/javascript">$('#DEBUG_USE').val("<!--$DEBUG_USE-->");</script>
                                 <a style="width:150px;" id="btnshwlog" data-icon="info"    data-role="button" data-mini="true" target="log" href="/admin/system/tools/logfile.cgi?logfile=plugins/<!--$psubfolder-->/Text2SIP.log&header=html&format=template"><!--$TXT_BTN_SHOW_LOG--></a>
                                 <a style="width:150px;" id="btndwllog" data-icon="arrow-d" data-role="button" data-mini="true" target="_self" href="/plugins/<!--$psubfolder-->/?mode=download_logfile"><!--$TXT_BTN_DOWNLOAD_LOG--></a>
-                                <a style="width:150px;" id="btndwllog" data-icon="delete"  data-role="button" data-mini="true" target="_self" onclick="ConfirmDialog2('<br/><br/><table><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_delete.png\'></td><td><!--$TXT_EMPTY_LOG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_EMPTY_LOG_DIALOG_TITLE-->');"><!--$TXT_BTN_EMPTY_LOG--></a>
+                                <a style="width:150px;" id="btnemptylog" data-icon="delete"  data-role="button" data-mini="true" target="_self" onclick="ConfirmDialog2('<br/><br/><table><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_delete.png\'></td><td><!--$TXT_EMPTY_LOG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_EMPTY_LOG_DIALOG_TITLE-->');"><!--$TXT_BTN_EMPTY_LOG--></a>
                               </td>
                             </tr>
                           </table>
@@ -353,7 +353,7 @@
                             </td>
                           </tr>
                         </table>
-						<table><tr><td><a style="width:300px;" id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfg" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        
+						<table><tr><td><a style="width:300px;" id="btncancelbottom" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a></td><td><a style="width:300px;" id="btnsavecfgbottom" data-icon="check" data-role="button" data-mini="true" target="_self" onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a></td></tr></table>                        
 						<table>
                           <tr>
                             <td width="550px">
