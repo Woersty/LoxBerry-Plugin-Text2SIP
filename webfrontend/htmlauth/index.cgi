@@ -545,9 +545,9 @@ if ($do eq "makecall")
     # ---------------------------------------------------------------
     # pjsua-Anrufschicht (ersetzt sipcmd + sipcall_wrapper.pl).
     # --bound-addr bindet an die LAN-IP -> kein docker0/OPAL-Hack noetig.
-    # Die WAV ($pluginwavfile) hat die gewaehlte TTS-Engine (pico2wave /
-    # Text2Speech-Plugin / Piper) bereits erzeugt; pjsua spielt sie NACH
-    # CONFIRMED ab. DTMF-/Bestaetigungs-/Result-URL-Logik: pjsua_call.pl.
+    # Die WAV ($pluginwavfile) hat die gewaehlte TTS-Engine (pico2wave oder
+    # Text2Speech-Plugin) bereits erzeugt; pjsua spielt sie NACH CONFIRMED
+    # ab. DTMF-/Bestaetigungs-/Result-URL-Logik: pjsua_call.pl.
     # ---------------------------------------------------------------
     my $arch      = `dpkg --print-architecture 2>/dev/null`;
     chomp $arch;
