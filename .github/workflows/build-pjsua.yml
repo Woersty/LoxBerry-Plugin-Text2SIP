@@ -139,6 +139,18 @@ jobs:
             echo "OK: runs on Debian 11 and newer"
           '
 
+      # objdump only describes the binary. Starting it proves it was linked
+      # for the architecture it claims, which is otherwise a failure that only
+      # shows up on someone's device. The build image is reused because it is
+      # the oldest supported Debian and already has the runtime libraries.
+      - name: Run what was built
+        run: |
+          set -eu
+          docker run --rm --platform ${{ matrix.platform }} pjsua-build \
+            sh -c 'B=$(ls pjsip-apps/bin/pjsua-* | head -1); "$B" --version' > version.txt
+          grep -E "PJ_VERSION" version.txt
+          echo "OK: the ${{ matrix.debian_arch }} binary starts"
+
       - uses: actions/upload-artifact@v4
         with:
           name: pjsua-${{ matrix.debian_arch }}
