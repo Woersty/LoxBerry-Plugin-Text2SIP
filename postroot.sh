@@ -68,13 +68,6 @@ else
   fi
 fi
 
-# Locales: UTF-8 generieren + Default setzen (non-interactive)
-if ! locale | grep -qi 'UTF-8'; then
-  echo "<DEB> postroot: generating locales de_DE.UTF-8 en_US.UTF-8 and setting default" >> "$logfile" 2>&1
-  locale-gen de_DE.UTF-8 en_US.UTF-8              >> "$logfile" 2>&1 || true
-  update-locale LANG=de_DE.UTF-8                  >> "$logfile" 2>&1 || true
-fi
-
 # Marker: Postroot hat Pico erledigt (nur zu Debugzwecken)
 mkdir -p /var/lib/text2sip 2>/dev/null
 echo "<DEB> pico-done:${VERSION_CODENAME}" > /var/lib/text2sip/pico-state
