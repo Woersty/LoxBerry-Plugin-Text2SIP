@@ -322,6 +322,10 @@ if ($do eq "makecall")
     }
     $P2W_Text = defined $raw_txt ? $raw_txt : '';
 
+    # Config und CGI liefern UTF-8-Bytes. Ab hier ist $P2W_Text ein Zeichen-String;
+    # jede Ausgabe kodiert wieder nach UTF-8.
+    $P2W_Text = decode_utf8($P2W_Text) unless utf8::is_utf8($P2W_Text);
+
     # ---------------------------------------------------------
     # 2) SIP-Parameter – gleiche Logik (Param > Config)
     # ---------------------------------------------------------
@@ -407,6 +411,7 @@ if ($do eq "makecall")
     # ----------------------------------------------------------
     my $tts_param = $query{'tts'} // '';
     $tts_param =~ s/\r?\n/ /g;
+    $tts_param = decode_utf8($tts_param) unless utf8::is_utf8($tts_param);
 
     # Merken, ob der ursprüngliche Text überhaupt ein "##" hatte
     my $had_placeholder = ($P2W_Text =~ /##/) ? 1 : 0;
@@ -435,9 +440,10 @@ if ($do eq "makecall")
             # Normale Miniserver-URL
             my $msinfo = `$wgetbin -a $lbplogdir/$logfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1 | grep value | cut -d'"' -f4`;
             chomp $msinfo;
+            $msinfo = decode_utf8($msinfo) unless utf8::is_utf8($msinfo);
 
             if ($? ne 0 || $msinfo eq '') {
-                my $text = $phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo;
+                my $text = encode_utf8($phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo);
                 system("echo '$text' >> $lbplogdir/$logfile");
 
                 # Fallback: &tts oder unknown auf "##"
@@ -480,7 +486,8 @@ if ($do eq "makecall")
     $P2W_Text =~ s/\r?\n/ /g;
 
     # Finalen Text loggen
-    system("echo 'Final TTS text (VG=$guide): $P2W_Text' >> $lbplogdir/$logfile");
+    my $log_txt = encode_utf8($P2W_Text);
+    system("echo 'Final TTS text (VG=$guide): $log_txt' >> $lbplogdir/$logfile");
 
     # ---------------------------------------------------------
     # TTS-Routing + Anruf-Job
@@ -1237,7 +1244,7 @@ sub usepico
 
 	# --- 1) Pico: Text -> TMP-WAV ---
 	$job->("## Generating voice (pico2wave)");
-	my $text = $P2W_Text // '';
+	my $text = encode_utf8($P2W_Text // '');
 
 	# stderr temporär ins Plugin-Log umleiten
 	open my $SAVEDERR, ">&", \*STDERR;
