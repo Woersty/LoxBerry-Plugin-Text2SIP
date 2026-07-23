@@ -714,7 +714,110 @@ elsif ($do eq "get_t2s_status")
     exit;
 }
 
-  
+
+#--------------- Configuration export ---------------
+elsif ($do eq "config_export")
+{
+    our $pluginconfigfile;
+    my @t = localtime();
+    my $stamp = sprintf("%04d%02d%02d-%02d%02d%02d",
+                        $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
+
+    if (! -r $pluginconfigfile) {
+        print header(-type => 'text/plain', -charset => 'UTF-8');
+        print "configuration not readable\n";
+        exit;
+    }
+
+    print header(-type => 'application/octet-stream', -charset => '',
+                 -attachment    => "Text2SIP-config-$stamp.cfg",
+                 -Content_Length => (-s $pluginconfigfile));
+    binmode STDOUT;
+    if (open(my $cf, '<', $pluginconfigfile)) { binmode $cf; print $_ while <$cf>; close $cf; }
+    exit;
+}
+
+#--------------- Configuration import ---------------
+elsif ($do eq "config_import")
+{
+    our $pluginconfigfile;
+    print header(-type => 'application/json', -charset => 'UTF-8');
+
+    # Die Datei wird als Bytes uebernommen und nicht dekodiert. Sie enthaelt
+    # je nach Alter UTF-8 oder ISO-8859-1; as_chars() beim Lesen der Werte
+    # erkennt beides, ein Dekodieren an dieser Stelle wuerde nur raten.
+    my $payload = '';
+    my $up = upload('cfgfile');
+    if ($up) {
+        binmode $up;
+        local $/;
+        $payload = <$up> // '';
+    }
+    $payload =~ s/\r\n/\n/g;
+
+    if (length($payload) < 10 || length($payload) > 1048576) {
+        print JSON::encode_json({ ok => 0, msg => 'unexpected file size' }); exit;
+    }
+    if ($payload =~ /[\x00-\x08\x0B\x0C\x0E-\x1F]/) {
+        print JSON::encode_json({ ok => 0, msg => 'not a configuration file' }); exit;
+    }
+    # Eine brauchbare Konfiguration hat mindestens eine Zuweisung und den Plugin-Schalter.
+    if ($payload !~ /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=/m || $payload !~ /PLUGIN_USE/) {
+        print JSON::encode_json({ ok => 0, msg => 'not a Text2SIP configuration' }); exit;
+    }
+
+    my @t = localtime();
+    my $stamp = sprintf("%04d%02d%02d-%02d%02d%02d",
+                        $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
+    if (-e $pluginconfigfile) {
+        require File::Copy;
+        File::Copy::copy($pluginconfigfile, "$pluginconfigfile.$stamp.bak");
+    }
+
+    # Die Einstellungen werden zusammengefuehrt, nicht ersetzt. Eine mit einer
+    # aelteren Version erzeugte Datei kennt spaeter hinzugekommene Einstellungen
+    # nicht; die behalten ihren aktuellen Wert, statt zu verschwinden. Nicht mehr
+    # verwendete Schluessel werden folgenlos mitgefuehrt, damit ein Import nie an
+    # einem Versionsunterschied scheitert.
+    my %imported;
+    foreach my $line (split /\n/, $payload) {
+        next if $line =~ /^\s*[;#]/;
+        next if $line =~ /^\s*\[/;
+        next unless $line =~ /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/;
+        my ($k, $v) = ($1, $2);
+        $v =~ s/^"(.*)"$/$1/s;
+        $imported{$k} = $v;
+    }
+
+    if (!%imported) {
+        print JSON::encode_json({ ok => 0, msg => 'no settings found in file' });
+        exit;
+    }
+
+    my $target = eval { Config::Simple->new($pluginconfigfile) }
+              || eval { Config::Simple->new(syntax => 'ini') };
+    if (!$target) {
+        print JSON::encode_json({ ok => 0, msg => 'cannot read current configuration' });
+        exit;
+    }
+
+    my %before  = map { $_ => 1 } keys %{ $target->vars() || {} };
+    my $applied = 0;
+    foreach my $k (sort keys %imported) {
+        $target->param("default.$k", $imported{$k});
+        $applied++;
+    }
+    my $kept = scalar(grep { my $n = $_; $n =~ s/^default\.//; !exists $imported{$n} } keys %before);
+
+    if (eval { $target->write($pluginconfigfile); 1 }) {
+        print JSON::encode_json({ ok => 1, msg => 'imported',
+                                  applied => $applied, kept => $kept });
+    } else {
+        print JSON::encode_json({ ok => 0, msg => 'cannot write configuration' });
+    }
+    exit;
+}
+
   #--------------- Check config -----------------
   elsif ($do eq "check_config")
   {
