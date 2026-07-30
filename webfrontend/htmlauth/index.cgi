@@ -79,7 +79,7 @@ our ($T2S_INSTALLED,$T2S_USE,$T2SminVers,$t2s_is_installed,
 our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile,$CLIENT_ID,$client);
 
 # Pfade/Jobs/Audio
-our ($sipcmdlogfile,$pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$sipcmd,$cmd);
+our ($pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$cmd);
 
 ##########################################################################
 # Setup / Einlesen
@@ -127,10 +127,26 @@ $pico2wave     = "/usr/bin/pico2wave";
 $pluginbindir  = "$installfolder/webfrontend/htmlauth/plugins/$psubfolder/bin";
 $plugindatadir = "$installfolder/data/plugins/$psubfolder/wav";
 $plugintmpfile = "$installfolder/tmp/plugins/$psubfolder";
-$sipcmdlogfile = "$installfolder/log/plugins/$psubfolder/Text2SIP_sipcmd.log";
 
-# Logfile einmal leeren
-system("echo -n '' > $sipcmdlogfile");
+# Kodier-Helfer. Config::Simple, Backticks und die Kommandozeile arbeiten mit
+# UTF-8-Bytes; CGI (-utf8) und die Sprachdateien liefern Zeichen. as_chars()
+# wandelt beim Hereinkommen, as_bytes() beim Hinausgehen. Beide sind idempotent.
+sub as_chars {
+    my $v = shift;
+    return '' unless defined $v;
+    return $v if utf8::is_utf8($v);
+    # Bestehende Konfigurationen koennen ISO-8859-1 enthalten, weil die
+    # Einstellungsseite den Wert bisher unkodiert zurueckschrieb. Strikt als
+    # UTF-8 versuchen, sonst als Latin-1 lesen statt Ersatzzeichen zu liefern.
+    my $decoded = eval { Encode::decode('UTF-8', $v, Encode::FB_CROAK) };
+    return defined $decoded ? $decoded : Encode::decode('ISO-8859-1', $v);
+}
+
+sub as_bytes {
+    my $v = shift;
+    return '' unless defined $v;
+    return utf8::is_utf8($v) ? encode_utf8($v) : $v;
+}
 
 # Temp-Dateinamen-Helfer
 sub get_temp_filename {
@@ -146,9 +162,6 @@ sub get_temp_filename {
 $pluginjobfile = get_temp_filename('.job.tsp');
 $pluginwavfile = get_temp_filename('_wav');
 $plugintmpfile = get_temp_filename('.tmp.wav');
-
-# SIP-Binary
-$sipcmd        = $pluginbindir . "/sipcmd";
 
 # Plugin-Config laden
 $plugin_cfg    = Config::Simple->new($pluginconfigfile);
@@ -277,8 +290,7 @@ if (defined $ENV{'QUERY_STRING'} && $ENV{'QUERY_STRING'} ne '') {
 if ($do eq "makecall")
 {
     print header(-type => 'text/plain', -charset => 'UTF-8');
-    our $check_result = "";
-    my $guide         = int($query{'vg'});
+    my $guide = int($query{'vg'});
 
     $ENV{SDL_AUDIODRIVER} = 'dummy';  # verhindert ALSA-Init von ffplay/SDL
 
@@ -329,6 +341,10 @@ if ($do eq "makecall")
         $raw_txt = $cfg_get->('P2W_Text', '');
     }
     $P2W_Text = defined $raw_txt ? $raw_txt : '';
+
+    # Config und CGI liefern UTF-8-Bytes. Ab hier ist $P2W_Text ein Zeichen-String;
+    # jede Ausgabe kodiert wieder nach UTF-8.
+    $P2W_Text = as_chars($P2W_Text);
 
     # ---------------------------------------------------------
     # 2) SIP-Parameter – gleiche Logik (Param > Config)
@@ -415,6 +431,7 @@ if ($do eq "makecall")
     # ----------------------------------------------------------
     my $tts_param = $query{'tts'} // '';
     $tts_param =~ s/\r?\n/ /g;
+    $tts_param = as_chars($tts_param);
 
     # Merken, ob der ursprüngliche Text überhaupt ein "##" hatte
     my $had_placeholder = ($P2W_Text =~ /##/) ? 1 : 0;
@@ -443,9 +460,10 @@ if ($do eq "makecall")
             # Normale Miniserver-URL
             my $msinfo = `$wgetbin -a $lbplogdir/$logfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1 | grep value | cut -d'"' -f4`;
             chomp $msinfo;
+            $msinfo = as_chars($msinfo);
 
             if ($? ne 0 || $msinfo eq '') {
-                my $text = $phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo;
+                my $text = as_bytes($phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo);
                 system("echo '$text' >> $lbplogdir/$logfile");
 
                 # Fallback: &tts oder unknown auf "##"
@@ -488,10 +506,11 @@ if ($do eq "makecall")
     $P2W_Text =~ s/\r?\n/ /g;
 
     # Finalen Text loggen
-    system("echo 'Final TTS text (VG=$guide): $P2W_Text' >> $lbplogdir/$logfile");
+    my $log_txt = as_bytes($P2W_Text);
+    system("echo 'Final TTS text (VG=$guide): $log_txt' >> $lbplogdir/$logfile");
 
     # ---------------------------------------------------------
-    # TTS-Routing + sipcmd-Job – ab hier wie gehabt
+    # TTS-Routing + Anruf-Job
     # ---------------------------------------------------------
 
     $cmd = 'echo "################################ Start job from '.$pluginjobfile.' @ '.localtime(time).' " 2>&1 >>'.$lbplogdir."/".$logfile;
@@ -526,75 +545,96 @@ if ($do eq "makecall")
 
     #************************** End TTS routing (CONFIG-ONLY) ***************************
 
-    our $debug_value  = '2>/dev/null';
-    our $sipcmd_debug = '';
-
-    if (defined $DEBUG_USE && $DEBUG_USE eq 'on') {
-        $sipcmd_debug = "-o $sipcmdlogfile";
-        $debug_value  = '2>&1';
-    }
-
-    if ( $SIPCMD_CALL_RESULT_VI ne "" && substr($SIPCMD_CALL_RESULT_VI,0,7) eq "http://") {
-        $check_result = '|while read DTMF_LINE; do echo $DTMF_LINE|grep -q "Exiting."; if [ $? -eq 0 ]; then wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'0"; fi; DTMF_CODE=`echo $DTMF_LINE |grep "receive DTMF:"|cut -c16`; echo "DTMF: $DTMF_CODE"; wget -q -t 1 -T 10 -O /dev/null "'.$SIPCMD_CALL_RESULT_VI.'$DTMF_CODE"; echo $DTMF_LINE|grep -q "receive DTMF:";  if [ "$DTMF_CODE" == "'.$SIPCMD_CONFIRMATION_DIGIT.'" ]; then echo "Confirmation code '.$SIPCMD_CONFIRMATION_DIGIT.' detected. Exit!!" >> '.$lbplogdir."/".$logfile.'; sleep .5; killall -15 '.$sipcmd.'; else if [ ${#DTMF_CODE} -eq 1 ]; then echo "Confirmation code [$DTMF_CODE] detected but ['.$SIPCMD_CONFIRMATION_DIGIT.'] expected. Continue..." >> '.$lbplogdir."/".$logfile.'; fi; fi; done ';
-    }
-
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
 
-    $ENV{'MASTER_IP'}      = $HOST_IP;
-    $ENV{'OPAL_INTERFACE'} = $HOST_IP;
+    # (Frueherer docker0/OPAL_IFACE_EXCLUDE-Hack entfaellt: pjsua bindet direkt
+    #  per --bound-addr an $HOST_IP, waehlt also nie eine Docker-Bridge-IP.)
+    # ---------------------------------------------------------------
+    # pjsua-Anrufschicht (ersetzt sipcmd + sipcall_wrapper.pl).
+    # --bound-addr bindet an die LAN-IP -> kein docker0/OPAL-Hack noetig.
+    # Die WAV ($pluginwavfile) hat die gewaehlte TTS-Engine (pico2wave oder
+    # Text2Speech-Plugin) bereits erzeugt; pjsua spielt sie NACH CONFIRMED
+    # ab. DTMF-/Bestaetigungs-/Result-URL-Logik: pjsua_call.pl.
+    # ---------------------------------------------------------------
+    my $arch      = `dpkg --print-architecture 2>/dev/null`;
+    chomp $arch;
+    my $pjsua_bin = "$pluginbindir/pjsua-$arch";
+    my $driver    = "$pluginbindir/pjsua_call.pl";
 
-    $ENV{'OPAL_IFACE_EXCLUDE'} = 'docker0,172.16.0.0/12';
-    my $docker_ip = `ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}' 2>/dev/null`;
-    chomp $docker_ip;
-    if ($docker_ip) {
-        $ENV{'OPAL_IFACE_EXCLUDE'} .= ",$docker_ip";
+    # Ohne passendes Binary kaeme der Anruf ohne erkennbaren Grund nicht zustande.
+    if (! -e $pjsua_bin) {
+        my $m = "## ERROR: no pjsua binary for architecture '$arch' (expected $pjsua_bin)";
+        system('echo ' . shell_quote($m) . ' >> ' . shell_quote("$lbplogdir/$logfile"));
+        print "\n<span class='test2sip_job_failed'>"
+            . ($phraseplugin->param('TXT_JOB_QUEUED_FAIL') // 'Call failed')
+            . "</span>\n<br/>pjsua: $arch\n";
+        exit;
     }
-    $sipcmd = $lbphtmlauthdir.'/bin/sipcall_wrapper.pl';
+    my $drv_debug = (defined $DEBUG_USE && $DEBUG_USE eq 'on') ? 1 : 0;
+    my $disp      = defined $SIPCMD_CALLING_USER_NAME ? $SIPCMD_CALLING_USER_NAME : '';
 
-    $cmd = $sipcmd
-          . ' -m "G.711*" ' . $sipcmd_debug
-          . ' -T ' . $SIPCMD_CALL_TIMEOUT
-          . ' -P sip'
-          . ' -u "' . $SIPCMD_CALLING_USER_NUMBER . '"'
-          . ' -c "' . $SIPCMD_CALLING_USER_PASSWORD . '"'
-          . ' -a "' . $SIPCMD_CALLING_USER_NAME . '"'
-          . ' -w "' . $SIPCMD_SIP_PROXY . '"'
-          . ' -x "c' . $SIPCMD_CALLED_USER
-          . ';w' . $SIPCMD_CALL_PAUSE_BEFORE_GUIDE
-          . ';v' . $pluginwavfile
-          . ';w' . $SIPCMD_CALL_PAUSE_AFTER_GUIDE
-          . ';h" '
-          . $debug_value
-          . ' | tee -a ' . $lbplogdir . '/' . $logfile . $check_result;
+    # Die TTS-Kette erzeugt zwei Dateien: eine echte RIFF/WAVE ($wav_path, .wav)
+    # und ein headerloses RAW-s16le ($pluginwavfile, _wav) fuer sipcmds v-Kommando.
+    # pjsua braucht die echte WAV -> aus dem _wav-Namen ableiten (siehe usepico/t2svoice).
+    my $wav_for_pjsua = $pluginwavfile;
+    $wav_for_pjsua =~ s/_wav$/.wav/i;
+    $wav_for_pjsua = $pluginwavfile unless -e $wav_for_pjsua;  # Fallback (Diagnose im Log)
 
-    system ("echo ## Full SIPCMD command: '".$cmd."' >> $lbplogdir/$logfile");
+    # Argumente einzeln quoten. Das Passwort landet ausschliesslich im Jobfile
+    # (fuer die Ausfuehrung noetig), NICHT im lesbaren Text2SIP.log.
+    $cmd = join(' ',
+        '/usr/bin/perl', shell_quote($driver),
+        '--bin='           . shell_quote($pjsua_bin),
+        '--bound='         . shell_quote($HOST_IP),
+        '--proxy='         . shell_quote($SIPCMD_SIP_PROXY),
+        '--user='          . shell_quote($SIPCMD_CALLING_USER_NUMBER),
+        '--password='      . shell_quote($SIPCMD_CALLING_USER_PASSWORD),
+        '--display='       . shell_quote($disp),
+        '--called='        . shell_quote($SIPCMD_CALLED_USER),
+        '--wav='           . shell_quote($wav_for_pjsua),
+        '--pause_before='  . int($SIPCMD_CALL_PAUSE_BEFORE_GUIDE),
+        '--pause_after='   . int($SIPCMD_CALL_PAUSE_AFTER_GUIDE),
+        '--timeout='       . int($SIPCMD_CALL_TIMEOUT),
+        '--confirm_digit=' . shell_quote($SIPCMD_CONFIRMATION_DIGIT),
+        '--result_url='    . shell_quote($SIPCMD_CALL_RESULT_VI),
+        '--log='           . shell_quote("$lbplogdir/$logfile"),
+        '--debug='         . $drv_debug,
+    );
 
-    my $job_hdr = 'echo "################################ Start job from '.$pluginjobfile.' @ $(date)" 2>&1 >>'.$lbplogdir.'/'.$logfile;
-    system('echo ' . $job_hdr . ' >> ' . $pluginjobfile);
+    # Maskierte Kommandozeile ins lesbare Log (Passwort nie im Klartext).
+    my $cmd_log = mask_secrets($cmd);
+    $cmd_log =~ s/(--password=)\S+/${1}***/g;
+    if (open my $lf, '>>:encoding(UTF-8)', "$lbplogdir/$logfile") {
+        print $lf _ts() . " ## pjsua call: $cmd_log\n";
+        close $lf;
+    }
 
-    system ("chmod +x $sipcmd >> $pluginjobfile");
-    system ("echo '".$cmd."' >> $pluginjobfile");
+    # Jobfile per Perl-I/O schreiben (kein shell-echo wegen Quoting der Argumente).
+    if (open my $jf, '>', $pluginjobfile) {
+        my $qlog = shell_quote("$lbplogdir/$logfile");
+        print $jf "#!/bin/bash\n";
+        print $jf "echo \"################################ Start job from $pluginjobfile @ \$(date)\" >> $qlog\n";
+        print $jf "chmod +x " . shell_quote($pjsua_bin) . " 2>/dev/null\n";
+        print $jf $cmd . "\n";
+        print $jf "rm -f " . shell_quote($pluginwavfile) . " " . shell_quote($wav_for_pjsua) . " " . shell_quote($plugintmpfile) . " 2>/dev/null\n";
+        print $jf "echo \"################################ End job from $pluginjobfile\" >> $qlog\n";
+        close $jf;
+    } else {
+        print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_FAIL');
+        print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
+        exit;
+    }
 
-    my $delmsg = 'echo "'._ts().' ## Deleting all files " 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$delmsg."' >> $pluginjobfile");
-    my $delcmd = 'rm '.$plugindatadir.'/* 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$delcmd."' >> $pluginjobfile");
-
+    # In die Task-Spooler-Queue stellen (CGI kehrt sofort zurueck; Anruf laeuft im Hintergrund).
     system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$lbplogdir/$logfile");
-    system ("tsp bash $pluginjobfile  2>&1 >>$lbplogdir/$logfile");
-    if ( $? eq "0" ) {
+    system("tsp bash $pluginjobfile >> $lbplogdir/$logfile 2>&1");
+    if ( $? == 0 ) {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_failed' ).addClass( 'test2sip_job_ok' ); </script>\n";
     } else {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_FAIL');
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_ok' ).addClass( 'test2sip_job_failed' ); </script>\n";
     }
-
-    my $catcmd = 'cat '.$sipcmdlogfile.' >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$catcmd."' >> $pluginjobfile");
-
-    my $job_end = 'echo "################################ End job from '.$pluginjobfile.' " 2>&1 >>'.$lbplogdir."/".$logfile;
-    system ("echo '".$job_end."' >> $pluginjobfile");
     exit;
 }
 
@@ -674,7 +714,110 @@ elsif ($do eq "get_t2s_status")
     exit;
 }
 
-  
+
+#--------------- Configuration export ---------------
+elsif ($do eq "config_export")
+{
+    our $pluginconfigfile;
+    my @t = localtime();
+    my $stamp = sprintf("%04d%02d%02d-%02d%02d%02d",
+                        $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
+
+    if (! -r $pluginconfigfile) {
+        print header(-type => 'text/plain', -charset => 'UTF-8');
+        print "configuration not readable\n";
+        exit;
+    }
+
+    print header(-type => 'application/octet-stream', -charset => '',
+                 -attachment    => "Text2SIP-config-$stamp.cfg",
+                 -Content_Length => (-s $pluginconfigfile));
+    binmode STDOUT;
+    if (open(my $cf, '<', $pluginconfigfile)) { binmode $cf; print $_ while <$cf>; close $cf; }
+    exit;
+}
+
+#--------------- Configuration import ---------------
+elsif ($do eq "config_import")
+{
+    our $pluginconfigfile;
+    print header(-type => 'application/json', -charset => 'UTF-8');
+
+    # Die Datei wird als Bytes uebernommen und nicht dekodiert. Sie enthaelt
+    # je nach Alter UTF-8 oder ISO-8859-1; as_chars() beim Lesen der Werte
+    # erkennt beides, ein Dekodieren an dieser Stelle wuerde nur raten.
+    my $payload = '';
+    my $up = upload('cfgfile');
+    if ($up) {
+        binmode $up;
+        local $/;
+        $payload = <$up> // '';
+    }
+    $payload =~ s/\r\n/\n/g;
+
+    if (length($payload) < 10 || length($payload) > 1048576) {
+        print JSON::encode_json({ ok => 0, msg => 'unexpected file size' }); exit;
+    }
+    if ($payload =~ /[\x00-\x08\x0B\x0C\x0E-\x1F]/) {
+        print JSON::encode_json({ ok => 0, msg => 'not a configuration file' }); exit;
+    }
+    # Eine brauchbare Konfiguration hat mindestens eine Zuweisung und den Plugin-Schalter.
+    if ($payload !~ /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=/m || $payload !~ /PLUGIN_USE/) {
+        print JSON::encode_json({ ok => 0, msg => 'not a Text2SIP configuration' }); exit;
+    }
+
+    my @t = localtime();
+    my $stamp = sprintf("%04d%02d%02d-%02d%02d%02d",
+                        $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
+    if (-e $pluginconfigfile) {
+        require File::Copy;
+        File::Copy::copy($pluginconfigfile, "$pluginconfigfile.$stamp.bak");
+    }
+
+    # Die Einstellungen werden zusammengefuehrt, nicht ersetzt. Eine mit einer
+    # aelteren Version erzeugte Datei kennt spaeter hinzugekommene Einstellungen
+    # nicht; die behalten ihren aktuellen Wert, statt zu verschwinden. Nicht mehr
+    # verwendete Schluessel werden folgenlos mitgefuehrt, damit ein Import nie an
+    # einem Versionsunterschied scheitert.
+    my %imported;
+    foreach my $line (split /\n/, $payload) {
+        next if $line =~ /^\s*[;#]/;
+        next if $line =~ /^\s*\[/;
+        next unless $line =~ /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/;
+        my ($k, $v) = ($1, $2);
+        $v =~ s/^"(.*)"$/$1/s;
+        $imported{$k} = $v;
+    }
+
+    if (!%imported) {
+        print JSON::encode_json({ ok => 0, msg => 'no settings found in file' });
+        exit;
+    }
+
+    my $target = eval { Config::Simple->new($pluginconfigfile) }
+              || eval { Config::Simple->new(syntax => 'ini') };
+    if (!$target) {
+        print JSON::encode_json({ ok => 0, msg => 'cannot read current configuration' });
+        exit;
+    }
+
+    my %before  = map { $_ => 1 } keys %{ $target->vars() || {} };
+    my $applied = 0;
+    foreach my $k (sort keys %imported) {
+        $target->param("default.$k", $imported{$k});
+        $applied++;
+    }
+    my $kept = scalar(grep { my $n = $_; $n =~ s/^default\.//; !exists $imported{$n} } keys %before);
+
+    if (eval { $target->write($pluginconfigfile); 1 }) {
+        print JSON::encode_json({ ok => 1, msg => 'imported',
+                                  applied => $applied, kept => $kept });
+    } else {
+        print JSON::encode_json({ ok => 0, msg => 'cannot write configuration' });
+    }
+    exit;
+}
+
   #--------------- Check config -----------------
   elsif ($do eq "check_config")
   {
@@ -767,18 +910,18 @@ elsif ($do eq "get_t2s_status")
           	$SIPCMD_CONFIRMATION_DIGIT = "-";
           };
           $plugin_cfg->param('default.P2W_lang'.$i                      ,"$P2W_lang"                       );
-          $plugin_cfg->param('default.P2W_Text'.$i, $P2W_Text);
-          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$i    ,"$SIPCMD_CALLING_USER_NUMBER"     );
-          $plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$i  ,"$SIPCMD_CALLING_USER_PASSWORD"   );
-          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$i      ,"$SIPCMD_CALLING_USER_NAME"       );
-          $plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$i              ,"$SIPCMD_SIP_PROXY"               );
-          $plugin_cfg->param('default.SIPCMD_CALLED_USER'.$i            ,"$SIPCMD_CALLED_USER"             );
+          $plugin_cfg->param('default.P2W_Text'.$i, as_bytes($P2W_Text));
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$i    ,as_bytes($SIPCMD_CALLING_USER_NUMBER)     );
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$i  ,as_bytes($SIPCMD_CALLING_USER_PASSWORD)   );
+          $plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$i      ,as_bytes($SIPCMD_CALLING_USER_NAME)       );
+          $plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$i              ,as_bytes($SIPCMD_SIP_PROXY)               );
+          $plugin_cfg->param('default.SIPCMD_CALLED_USER'.$i            ,as_bytes($SIPCMD_CALLED_USER)             );
           $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$i,"$SIPCMD_CALL_PAUSE_BEFORE_GUIDE" );
           $plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$i ,"$SIPCMD_CALL_PAUSE_AFTER_GUIDE"  );
-          $plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$i         ,"$SIPCMD_CALL_RESULT_VI"          );
+          $plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$i         ,as_bytes($SIPCMD_CALL_RESULT_VI)          );
           $plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$i           ,"$SIPCMD_CALL_TIMEOUT"            );
           $plugin_cfg->param('default.SIPCMD_CONFIRMATION_DIGIT'.$i     ,"$SIPCMD_CONFIRMATION_DIGIT"      );
-          $plugin_cfg->param('default.SIPCMD_MSINFO'.$i                 ,"$SIPCMD_MSINFO"                  );
+          $plugin_cfg->param('default.SIPCMD_MSINFO'.$i                 ,as_bytes($SIPCMD_MSINFO)                  );
         }
       }
 	  
@@ -921,17 +1064,17 @@ elsif ($do eq "get_t2s_status")
                next; 
             }
             if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
-            $P2W_Text                       =  "".$plugin_cfg->param('default.P2W_Text'.$vg_id                          );
-            $SIPCMD_CALLING_USER_NUMBER     =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$vg_id        );
-            $SIPCMD_CALLING_USER_PASSWORD   =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$vg_id      );
-            $SIPCMD_CALLING_USER_NAME       =  "".$plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$vg_id          );
-            $SIPCMD_SIP_PROXY               =  "".$plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$vg_id                  );
-            $SIPCMD_CALLED_USER             =  "".$plugin_cfg->param('default.SIPCMD_CALLED_USER'.$vg_id                );
+            $P2W_Text                       =  as_chars($plugin_cfg->param('default.P2W_Text'.$vg_id                          ));
+            $SIPCMD_CALLING_USER_NUMBER     =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$vg_id        ));
+            $SIPCMD_CALLING_USER_PASSWORD   =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$vg_id      ));
+            $SIPCMD_CALLING_USER_NAME       =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_NAME'.$vg_id          ));
+            $SIPCMD_SIP_PROXY               =  as_chars($plugin_cfg->param('default.SIPCMD_SIP_PROXY'.$vg_id                  ));
+            $SIPCMD_CALLED_USER             =  as_chars($plugin_cfg->param('default.SIPCMD_CALLED_USER'.$vg_id                ));
             $SIPCMD_CALL_PAUSE_BEFORE_GUIDE =  int($plugin_cfg->param('default.SIPCMD_CALL_PAUSE_BEFORE_GUIDE'.$vg_id   ));
             $SIPCMD_CALL_PAUSE_AFTER_GUIDE  =  int($plugin_cfg->param('default.SIPCMD_CALL_PAUSE_AFTER_GUIDE'.$vg_id    ));
-            $SIPCMD_CALL_RESULT_VI          =  "".$plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$vg_id             );
+            $SIPCMD_CALL_RESULT_VI          =  as_chars($plugin_cfg->param('default.SIPCMD_CALL_RESULT_VI'.$vg_id             ));
             $SIPCMD_CALL_TIMEOUT            =  int($plugin_cfg->param('default.SIPCMD_CALL_TIMEOUT'.$vg_id              ));
-            $SIPCMD_MSINFO                  =  "".$plugin_cfg->param('default.SIPCMD_MSINFO'.$vg_id                     );
+            $SIPCMD_MSINFO                  =  as_chars($plugin_cfg->param('default.SIPCMD_MSINFO'.$vg_id                     ));
             $SIPCMD_CONFIRMATION_DIGIT      =  "".$plugin_cfg->param('default.SIPCMD_CONFIRMATION_DIGIT'.$vg_id         );
             if ($SIPCMD_CONFIRMATION_DIGIT =~ /[0-9\*\#]/ ) 
             {
@@ -1224,7 +1367,7 @@ sub usepico
 
 	# --- 1) Pico: Text -> TMP-WAV ---
 	$job->("## Generating voice (pico2wave)");
-	my $text = $P2W_Text // '';
+	my $text = as_bytes($P2W_Text);
 
 	# stderr temporär ins Plugin-Log umleiten
 	open my $SAVEDERR, ">&", \*STDERR;

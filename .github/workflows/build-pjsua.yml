@@ -1,0 +1,193 @@
+name: Build pjsua binaries
+
+# Builds the pjsua SIP client for every architecture LoxBerry runs on and
+# commits the results to webfrontend/htmlauth/bin/. Run it from the Actions
+# tab, or let it run when the pinned pjproject version below is changed.
+#
+# Two things make one binary per architecture enough for every supported
+# system. It is built without TLS support, because a LoxBerry talks to a PBX
+# on the local network where SIP over TLS is not used, and OpenSSL is the
+# library whose name differs between Debian releases (libssl1.1 versus
+# libssl3). And it is built on the oldest supported Debian, because glibc is
+# backward compatible only: a binary built on a newer release refuses to
+# start on an older one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pjproject_version:
+        description: "pjproject version to build (empty = latest release)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - ".github/workflows/build-pjsua.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - debian_arch: amd64
+            platform: linux/amd64
+          - debian_arch: arm64
+            platform: linux/arm64
+          - debian_arch: armhf
+            platform: linux/arm/v7
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Needed to run the arm64 and armhf containers on an x86 runner.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Determine pjproject version
+        id: ver
+        run: |
+          V="${{ github.event.inputs.pjproject_version }}"
+          if [ -z "$V" ]; then
+            V=$(curl -fsSL https://api.github.com/repos/pjsip/pjproject/releases/latest \
+                | grep -oP '"tag_name":\s*"\K[^"]+')
+          fi
+          [ -n "$V" ] || { echo "could not determine version"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building pjproject $V for ${{ matrix.debian_arch }}"
+
+      - name: Build pjsua
+        run: |
+          set -eu
+          # Built on the oldest supported Debian on purpose. glibc is backward
+          # compatible but not forward compatible: a binary built on bookworm
+          # requires GLIBC_2.34 and does not start on bullseye (2.31). Building
+          # on bullseye produces one binary that runs on Debian 11, 12 and 13,
+          # and therefore on every LoxBerry 3 and 4.
+          # The source archive is fetched here rather than inside the image.
+          # The runner downloads natively and has a current certificate store,
+          # which an emulated container cannot be relied on to have.
+          curl -fsSL -o pjproject.tar.gz \
+            "https://github.com/pjsip/pjproject/archive/refs/tags/${{ steps.ver.outputs.version }}.tar.gz"
+          ls -l pjproject.tar.gz
+
+          cat > Dockerfile.pjsua <<EOF
+          FROM debian:bullseye-slim
+          # Bullseye leaves LTS in August 2026 and its packages move to the
+          # archive then. Try the normal mirrors first and fall back, so the
+          # build keeps working on both sides of that date.
+          RUN (apt-get update && apt-get install -y --no-install-recommends \\
+                   build-essential libasound2-dev uuid-dev) \\
+              || (sed -i 's|deb.debian.org|archive.debian.org|g; s|security.debian.org|archive.debian.org|g' /etc/apt/sources.list \\
+                  && sed -i '/bullseye-updates/d' /etc/apt/sources.list \\
+                  && apt-get -o Acquire::Check-Valid-Until=false update \\
+                  && apt-get install -y --no-install-recommends \\
+                       build-essential libasound2-dev uuid-dev) \\
+              && rm -rf /var/lib/apt/lists/*
+          WORKDIR /build
+          COPY pjproject.tar.gz /tmp/pjproject.tar.gz
+          RUN tar xzf /tmp/pjproject.tar.gz --strip-components=1 && rm /tmp/pjproject.tar.gz
+          # config_site.h must exist; an empty one selects the defaults.
+          RUN touch pjlib/include/pj/config_site.h
+          RUN ./configure \\
+                --disable-video --disable-v4l2 --disable-sdl --disable-ffmpeg \\
+                --disable-openh264 --disable-vpx --disable-libyuv --disable-libwebrtc \\
+                --disable-opencore-amr --disable-silk --disable-bcg729 \\
+                --disable-ssl
+          RUN make dep && make -j\$(nproc)
+          EOF
+
+          docker buildx build --platform ${{ matrix.platform }} \
+            -f Dockerfile.pjsua -t pjsua-build --load .
+
+          CID=$(docker create --platform ${{ matrix.platform }} pjsua-build)
+          BIN=$(docker run --rm --platform ${{ matrix.platform }} pjsua-build \
+                  sh -c 'ls pjsip-apps/bin/pjsua-* | head -1')
+          mkdir -p out
+          docker cp "$CID:/build/$BIN" "out/pjsua-${{ matrix.debian_arch }}"
+          docker rm -v "$CID" >/dev/null
+          chmod +x "out/pjsua-${{ matrix.debian_arch }}"
+
+      # Fails the build when the binary would not start on the oldest
+      # supported system. Debian 11 ships glibc 2.31, so anything newer than
+      # that in the symbol versions means LoxBerry 3 could not run it.
+      - name: Check what was built
+        run: |
+          set -eu
+          B="out/pjsua-${{ matrix.debian_arch }}"
+          file "$B"
+
+          docker run --rm -v "$PWD/out:/out" debian:bookworm-slim sh -c '
+            apt-get update -qq && apt-get install -y -qq binutils >/dev/null
+            B=/out/pjsua-'"${{ matrix.debian_arch }}"'
+            echo "--- required libraries ---"
+            objdump -p "$B" | awk "/NEEDED/{print \$2}"
+            echo "--- glibc symbol versions ---"
+            objdump -T "$B" | grep -oE "GLIBC_[0-9]+\.[0-9]+" | sort -uV | tr "\n" " "
+            echo
+            HIGH=$(objdump -T "$B" | grep -oE "GLIBC_[0-9]+\.[0-9]+" | sort -uV | tail -1)
+            echo "highest: $HIGH"
+            # sort -V puts the lower version first when both are listed
+            LOWEST=$(printf "%s\nGLIBC_2.31\n" "$HIGH" | sort -uV | head -1)
+            if [ "$LOWEST" != "$HIGH" ]; then
+              echo "ERROR: $HIGH is newer than GLIBC_2.31 (Debian 11) - would not run on LoxBerry 3"
+              exit 1
+            fi
+            echo "OK: runs on Debian 11 and newer"
+          '
+
+      # objdump only describes the binary. Starting it proves it was linked
+      # for the architecture it claims, which is otherwise a failure that only
+      # shows up on someone's device. The build image is reused because it is
+      # the oldest supported Debian and already has the runtime libraries.
+      - name: Run what was built
+        run: |
+          set -eu
+          docker run --rm --platform ${{ matrix.platform }} pjsua-build \
+            sh -c 'B=$(ls pjsip-apps/bin/pjsua-* | head -1); "$B" --version' > version.txt
+          grep -E "PJ_VERSION" version.txt
+          echo "OK: the ${{ matrix.debian_arch }} binary starts"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pjsua-${{ matrix.debian_arch }}
+          path: out/pjsua-${{ matrix.debian_arch }}
+          retention-days: 7
+
+  commit:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Place the binaries
+        run: |
+          set -eu
+          mkdir -p webfrontend/htmlauth/bin
+          for a in amd64 arm64 armhf; do
+            cp "artifacts/pjsua-$a/pjsua-$a" "webfrontend/htmlauth/bin/pjsua-$a"
+            chmod 755 "webfrontend/htmlauth/bin/pjsua-$a"
+          done
+          ls -l webfrontend/htmlauth/bin/pjsua-*
+
+      - name: Commit if anything changed
+        run: |
+          set -eu
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add webfrontend/htmlauth/bin/pjsua-amd64 \
+                  webfrontend/htmlauth/bin/pjsua-arm64 \
+                  webfrontend/htmlauth/bin/pjsua-armhf
+          if git diff --cached --quiet; then
+            echo "binaries unchanged, nothing to commit"
+            exit 0
+          fi
+          git commit -m "Rebuild pjsua binaries for amd64, arm64 and armhf"
+          git push

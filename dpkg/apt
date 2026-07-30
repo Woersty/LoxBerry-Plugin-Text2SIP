@@ -1,5 +1,5 @@
 curl
-task-spooler 
+task-spooler
 ffmpeg
 avahi-daemon
 avahi-utils

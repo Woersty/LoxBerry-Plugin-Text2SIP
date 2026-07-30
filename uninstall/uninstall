@@ -193,7 +193,31 @@ if ($bridge_host && $bridge_host !~ /^\d{1,3}(?:\.\d{1,3}){3}$/) {
     log_info("No valid bridge hostname found for /etc/hosts cleanup.");
 }
 
-# ========= Step 7: Restart Mosquitto =========
+# ========= Step 7: Remove what the plugin put outside its own folders =========
+# LoxBerry deletes the plugin directories by itself, but not files postroot.sh
+# placed elsewhere. Without this they survive the uninstall.
+my $pico_state_dir = '/var/lib/text2sip';
+if (-d $pico_state_dir) {
+    remove_tree($pico_state_dir, { error => \my $err });
+    if (@$err) {
+        log_warn("Failed to remove $pico_state_dir");
+    } else {
+        log_ok("Removed state folder: $pico_state_dir");
+    }
+} else {
+    log_info("State folder not found: $pico_state_dir");
+}
+
+my $helper_copy = '/etc/mosquitto/sip-uninstall.pl';
+if (-e $helper_copy) {
+    unlink($helper_copy)
+        ? log_ok("Removed helper copy: $helper_copy")
+        : log_warn("Failed to remove $helper_copy: $!");
+} else {
+    log_info("Helper copy not found: $helper_copy");
+}
+
+# ========= Step 8: Restart Mosquitto =========
 log_info("Restarting Mosquitto via mqtt-handler.pl ...");
 my $rc = system("$mqtt_handler action=restartgateway >/dev/null 2>&1");
 if ($rc == 0) {

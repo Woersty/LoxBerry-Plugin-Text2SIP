@@ -68,13 +68,6 @@ else
   fi
 fi
 
-# Locales: UTF-8 generieren + Default setzen (non-interactive)
-if ! locale | grep -qi 'UTF-8'; then
-  echo "<DEB> postroot: generating locales de_DE.UTF-8 en_US.UTF-8 and setting default" >> "$logfile" 2>&1
-  locale-gen de_DE.UTF-8 en_US.UTF-8              >> "$logfile" 2>&1 || true
-  update-locale LANG=de_DE.UTF-8                  >> "$logfile" 2>&1 || true
-fi
-
 # Marker: Postroot hat Pico erledigt (nur zu Debugzwecken)
 mkdir -p /var/lib/text2sip 2>/dev/null
 echo "<DEB> pico-done:${VERSION_CODENAME}" > /var/lib/text2sip/pico-state
@@ -93,24 +86,16 @@ echo "<OK> sip-uninstall.pl has been copied to /etc/mosquitto"
 echo "<INFO> Start Text2SIP installation, for further infos see Plugin logfile" >> "$logfile" 2>&1
 bash $5/system/daemons/plugins/Text2SIP >> "$logfile" 2>&1 &
 
-# ===== Verify MQTT Gateway process status =====
+# ===== Report MQTT Gateway state =====
+# LoxBerry 4 runs the gateway as mqtt_gateway.py, earlier versions as
+# mqttgateway.pl. Only report what is there - see the comment below.
 echo "<INFO> Checking MQTT Gateway runtime state …"
-MQTT_PROC="REPLACELBHOMEDIR/sbin/mqttgateway.pl"
-
-# Prüfen, ob der Prozess läuft
-if pgrep -f "$MQTT_PROC" >/dev/null 2>&1; then
-    PID=$(pgrep -f "$MQTT_PROC" | head -n1)
-    echo "<OK> MQTT Gateway is active (PID $PID)"
+if pgrep -f "sbin/mqtt_gateway\.py|sbin/mqttgateway\.pl" >/dev/null 2>&1; then
+    echo "<OK> MQTT Gateway is active"
 else
-    echo "<WARNING> MQTT Gateway not running – attempting to start manually ..."
-    REPLACELBHOMEDIR/sbin/mqtt-handler.pl action=startgateway >/dev/null 2>&1
-    sleep 2
-    if pgrep -f "$MQTT_PROC" >/dev/null 2>&1; then
-        PID=$(pgrep -f "$MQTT_PROC" | head -n1)
-        echo "<OK> MQTT Gateway started successfully (PID $PID)"
-    else
-        echo "<ERROR> Could not start MQTT Gateway – please check REPLACELBHOMEDIR/log/system_tmpfs/mqttgateway.log"
-    fi
+    echo "<INFO> MQTT Gateway is not running."
+    echo "<INFO> It is only used by the Text2Speech bridge, which is off by default."
+    echo "<INFO> LoxBerry does not start it while no Miniserver is configured."
 fi
 
 exit 0
