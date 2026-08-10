@@ -194,7 +194,7 @@ else if ($_REQUEST["mode"] == "make_call")
 
     // index.cgi liegt im HTMLAUTH-Bereich
     // $lbphtmlauthdir z.B.:
-    //   /opt/loxberry/webfrontend/htmlauth/plugins/text2sip
+    //   REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip
     $cgipath = $lbphtmlauthdir . "/index.cgi";
 
     if (!is_file($cgipath) || !is_readable($cgipath)) {

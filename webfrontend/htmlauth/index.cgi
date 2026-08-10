@@ -1130,7 +1130,7 @@ sub t2svoice {
     # ----------------------------------------------------------------------
     # Safe defaults for logging
     # ----------------------------------------------------------------------
-    my $safe_logdir  = '/opt/loxberry/log/plugins/text2sip';
+    my $safe_logdir  = 'REPLACELBHOMEDIR/log/plugins/text2sip';
     my $safe_logfile = 'Text2SIP.log';
 
     $lbplogdir  = ($lbplogdir  && -d $lbplogdir)  ? $lbplogdir  : $safe_logdir;
