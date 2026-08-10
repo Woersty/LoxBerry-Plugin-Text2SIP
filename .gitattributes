@@ -16,3 +16,9 @@
 *.PDF	 diff=astextplain
 *.rtf	 diff=astextplain
 *.RTF	 diff=astextplain
+
+# Shell / LoxBerry hook files must remain Unix-LF on Linux
+*.sh text eol=lf
+daemon/* text eol=lf
+cron/* text eol=lf
+uninstall/* text eol=lf

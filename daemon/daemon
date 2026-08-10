@@ -5,49 +5,34 @@
 # Required-Stop:     $remote_fs $syslog $network
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: This file configures the Loxberry Text2SIP-Plugin.
-# Description:       This file configures the Loxberry Text2SIP-Plugin.
+# Short-Description: Configure the LoxBerry Text2SIP plugin runtime files.
+# Description:       Idempotent runtime-directory and permission setup.
 ### END INIT INFO
 
 PATH="/sbin:/bin:/usr/sbin:/usr/bin"
 
-. /lib/lsb/init-functions
-
-### END INIT INFO
-
-# Version v2018.2.12
-# 11.02.2018 16:31:38
-
-plugindir="text2sip"
 logfile="REPLACELBHOMEDIR/log/plugins/text2sip/Text2SIP.log"
-plugconfigfile="REPLACELBHOMEDIR/config/plugins/text2sip/Text2SIP.cfg"
-flagfile="REPLACELBHOMEDIR/config/plugins/text2sip/modify.me"
+configdir="REPLACELBHOMEDIR/config/plugins/text2sip"
+configfile="$configdir/Text2SIP.cfg"
+flagfile="$configdir/modify.me"
 datafolder="REPLACELBHOMEDIR/data/plugins/text2sip"
-touch $logfile
-chown loxberry:loxberry $logfile
-chmod 666 $logfile
+wavfolder="$datafolder/wav"
 
-if [ -r $flagfile ]
-then
-  echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing Text2SIP Plugin."
-  echo `date +"%b  %e %H:%M:%S "`"modify.me found. Installing."                                                                2>&1 >>$logfile
-  cd REPLACELBHOMEDIR/data/plugins/text2sip
-  export DEBIAN_FRONTEND="noninteractive"
-  apt-get -y install --reinstall man-db  2>&1 >>$logfile
-  echo `date +"%b  %e %H:%M:%S "`"Adapt rights / owner for files in REPLACELBHOMEDIR/config/plugins/text2sip "   2>&1 >>$logfile
-  chown loxberry:loxberry REPLACELBHOMEDIR/config/plugins/text2sip/*                                                               2>&1 >>$logfile
-  chmod 664 REPLACELBHOMEDIR/config/plugins/text2sip/Text2SIP*                                                                     2>&1 >>$logfile
-  cd $datafolder                                                                                                               2>&1 >>$logfile
-  mkdir wav
-  chown loxberry:loxberry wav                                                                                                  2>&1 >>$logfile
-  chmod 755 wav                                                                                                                2>&1 >>$logfile
-  echo `date +"%b  %e %H:%M:%S "`"Installation completed!"                                                                       2>&1 >>$logfile
-  rm $flagfile																											        2>&1 >>$logfile
-else
-  echo `date +"%b  %e %H:%M:%S "`"modify.me not found. Plugin modification already done. Exit."
-  echo `date +"%b  %e %H:%M:%S "`"Plugin modification already done."                                                           2>&1 >>$logfile
+mkdir -p "$(dirname "$logfile")" "$configdir" "$wavfolder"
+touch "$logfile"
+chown loxberry:loxberry "$logfile" "$wavfolder" 2>/dev/null || true
+chmod 660 "$logfile" 2>/dev/null || true
+chmod 755 "$wavfolder" 2>/dev/null || true
+
+if [ -f "$configfile" ]; then
+    chown loxberry:loxberry "$configfile" 2>/dev/null || true
+    chmod 664 "$configfile" 2>/dev/null || true
 fi
-chown loxberry:loxberry $logfile
-chmod 666 $logfile
+
+if [ -r "$flagfile" ]; then
+    echo "$(date '+%b %e %H:%M:%S') modify.me found. Applying Text2SIP runtime setup." >> "$logfile"
+    rm -f "$flagfile"
+    echo "$(date '+%b %e %H:%M:%S') Text2SIP runtime setup completed." >> "$logfile"
+fi
 
 exit 0
