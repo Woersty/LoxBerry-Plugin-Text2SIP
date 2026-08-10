@@ -558,7 +558,7 @@ if ($do eq "makecall")
     # ---------------------------------------------------------------
     my $arch      = `dpkg --print-architecture 2>/dev/null`;
     chomp $arch;
-    my $pjsua_bin = "$pluginbindir/pjsua-$arch";
+    my $pjsua_bin = "$installfolder/data/plugins/$psubfolder/$arch/pjsua-$arch";
     my $driver    = "$pluginbindir/pjsua_call.pl";
 
     # Ohne passendes Binary kaeme der Anruf ohne erkennbaren Grund nicht zustande.

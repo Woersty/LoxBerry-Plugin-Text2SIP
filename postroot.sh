@@ -78,6 +78,19 @@ dpkg -l | awk '/libttspico/{print "postroot: " $1,$2,$3}' >> "$logfile" 2>&1 || 
 
 echo "<INFO>  Postroot: deps & locale done" >> "$logfile" 2>&1
 
+# --- PJSUA binaries: architecture-specific runtime files live in data/<arch>/ ---
+PJSUA_BASE="REPLACELBHOMEDIR/data/plugins/text2sip"
+for PJSUA_ARCH in amd64 arm64 armhf; do
+  PJSUA_BIN="$PJSUA_BASE/$PJSUA_ARCH/pjsua-$PJSUA_ARCH"
+  if [ -f "$PJSUA_BIN" ]; then
+    chown loxberry:loxberry "$PJSUA_BIN" >> "$logfile" 2>&1 || true
+    chmod 755 "$PJSUA_BIN" >> "$logfile" 2>&1 || true
+    echo "<OK> PJSUA binary prepared: $PJSUA_BIN" >> "$logfile" 2>&1
+  else
+    echo "<WARNING> PJSUA binary not found: $PJSUA_BIN" >> "$logfile" 2>&1
+  fi
+done
+
 # --- Copy uninstall helper ---
 cp -p -v $5/webfrontend/htmlauth/plugins/$3/bin/uninstall_sip_client_bridge.pl /etc/mosquitto/sip-uninstall.pl
 echo "<OK> sip-uninstall.pl has been copied to /etc/mosquitto"
