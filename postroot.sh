@@ -113,6 +113,78 @@ done
 # The current plugin talks directly to either the internal or external broker.
 # -----------------------------------------------------------------------------
 legacy_mosquitto_changed=0
+legacy_bridge_detected=0
+legacy_bridge_host=""
+legacy_bridge_conf="/etc/mosquitto/conf.d/30-bridge-t2s.conf"
+
+# Older bridge versions could add the bridge target hostname to /etc/hosts.
+# Capture that hostname BEFORE 30-bridge-t2s.conf is removed.
+if [ -r "$legacy_bridge_conf" ]; then
+    legacy_bridge_detected=1
+    legacy_bridge_host="$(awk '
+        $1 == "address" {
+            host = $2
+            sub(/:[0-9]+$/, "", host)
+            print host
+            exit
+        }
+    ' "$legacy_bridge_conf" 2>/dev/null)"
+fi
+
+# If the bridge config is already gone, try to recover the former host from an
+# old Text2SIP certificate bundle. Search both the live config and the temporary
+# pre-upgrade backup so this works independently of upgrade-script ordering.
+find_legacy_bridge_host_from_bundle() {
+    local bridge_dir bundle member info host
+    for bridge_dir in \
+        "REPLACELBPCONFIGDIR/bridge" \
+        "/tmp/REPLACELBPPLUGINDIR/bridge"
+    do
+        [ -d "$bridge_dir" ] || continue
+        for bundle in "$bridge_dir"/t2s_bundle*.tar.gz; do
+            [ -r "$bundle" ] || continue
+            member="$(tar -tzf "$bundle" 2>/dev/null | awk '/(^|\/)master\.info$/ { print; exit }')"
+            [ -n "$member" ] || continue
+            info="$(tar -xOf "$bundle" "$member" 2>/dev/null || true)"
+            [ -n "$info" ] || continue
+
+            # master.info historically existed as KEY=VALUE or JSON.
+            host="$(printf '%s\n' "$info" | sed -nE \
+                's/^[[:space:]]*(HOST|MASTER_HOST)[[:space:]]*[:=][[:space:]]*([^[:space:]"]+).*/\2/p' | head -n 1)"
+            if [ -z "$host" ]; then
+                host="$(printf '%s' "$info" | tr '\n' ' ' | sed -nE \
+                    's/.*"(HOST|MASTER_HOST)"[[:space:]]*:[[:space:]]*"([^"]+)".*/\2/p')"
+            fi
+            if [ -n "$host" ]; then
+                printf '%s\n' "$host"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+
+if [ -z "$legacy_bridge_host" ]; then
+    legacy_bridge_host="$(find_legacy_bridge_host_from_bundle || true)"
+fi
+
+# Remember whether any old bridge installation is present before deleting it.
+for legacy_probe in \
+    /etc/mosquitto/conf.d/30-bridge-t2s.conf \
+    /etc/mosquitto/role/sip-bridge \
+    /etc/mosquitto/sip-uninstall.pl \
+    /etc/mosquitto/certs/sip-bridge \
+    /etc/mosquitto/conf.d/mosq_mqttgateway.conf.disabled \
+    /etc/mosquitto/conf.d/mosq_passwd.disabled \
+    /etc/mosquitto/conf.d/disabled/mosq_mqttgateway.conf \
+    /etc/mosquitto/conf.d/disabled/mosq_passwd
+do
+    if [ -e "$legacy_probe" ]; then
+        legacy_bridge_detected=1
+        break
+    fi
+done
+
 for legacy_file in \
     /etc/mosquitto/conf.d/30-bridge-t2s.conf \
     /etc/mosquitto/role/sip-bridge \
@@ -152,6 +224,71 @@ restore_mosquitto_file /etc/mosquitto/conf.d/mosq_passwd.disabled /etc/mosquitto
 restore_mosquitto_file /etc/mosquitto/conf.d/disabled/mosq_mqttgateway.conf /etc/mosquitto/conf.d/mosq_mqttgateway.conf
 restore_mosquitto_file /etc/mosquitto/conf.d/disabled/mosq_passwd /etc/mosquitto/conf.d/mosq_passwd
 rmdir /etc/mosquitto/conf.d/disabled 2>/dev/null || true
+
+# Remove only the hostname previously used by the Text2SIP bridge from
+# /etc/hosts. Do not touch unrelated host entries. Historical bridge installs
+# used t2s.local as their default when no explicit HOST/MASTER_HOST was set.
+remove_legacy_hosts_entry() {
+    local host="$1"
+    local hosts_file="/etc/hosts"
+    local tmp_file
+
+    [ -n "$host" ] || return 0
+    [ -f "$hosts_file" ] || return 0
+
+    # The old installer did not create /etc/hosts entries when the bridge host
+    # itself was an IPv4 address.
+    if printf '%s' "$host" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+        return 0
+    fi
+
+    # Accept only a normal hostname token before using it as a lookup value.
+    if ! printf '%s' "$host" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+        echo "<WARNING> Refusing unsafe legacy bridge hostname for /etc/hosts cleanup: $host" >> "$logfile"
+        return 0
+    fi
+
+    if ! awk -v host="$host" '
+        /^[[:space:]]*#/ { next }
+        {
+            for (i = 2; i <= NF; i++) {
+                if ($i == host) { found = 1; exit }
+            }
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$hosts_file"; then
+        return 0
+    fi
+
+    tmp_file="$(mktemp /tmp/text2sip-hosts.XXXXXX)" || {
+        echo "<WARNING> Could not create temporary file for /etc/hosts cleanup" >> "$logfile"
+        return 0
+    }
+
+    if awk -v host="$host" '
+        /^[[:space:]]*#/ { print; next }
+        {
+            remove = 0
+            for (i = 2; i <= NF; i++) {
+                if ($i == host) { remove = 1; break }
+            }
+            if (!remove) print
+        }
+    ' "$hosts_file" > "$tmp_file" && cat "$tmp_file" > "$hosts_file"; then
+        echo "<INFO> Removed legacy Text2SIP bridge host from /etc/hosts: $host" >> "$logfile"
+    else
+        echo "<WARNING> Could not remove legacy Text2SIP bridge host from /etc/hosts: $host" >> "$logfile"
+    fi
+    rm -f "$tmp_file"
+}
+
+if [ -n "$legacy_bridge_host" ]; then
+    remove_legacy_hosts_entry "$legacy_bridge_host"
+elif [ "$legacy_bridge_detected" -eq 1 ]; then
+    # Safe fallback for bridge remnants where 30-bridge-t2s.conf/bundle has
+    # already disappeared: t2s.local was the historical default bridge host.
+    remove_legacy_hosts_entry "t2s.local"
+fi
 
 if [ "$legacy_mosquitto_changed" -eq 1 ]; then
     systemctl restart mosquitto >> "$logfile" 2>&1 || true
