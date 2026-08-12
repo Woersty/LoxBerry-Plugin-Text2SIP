@@ -3,7 +3,7 @@
 				  <div id="dialog"></div>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/jquery-ui-1.9.2.custom.min.js"></script>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/countrySelect.min.js"></script>
-                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css?v=20260810-v18">
+                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css?v=20260810-v20">
                   <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/countrySelect.min.css">
                   <center>
                     <form autocomplete="off" method="post" data-ajax="false" name="main_form" id="main_form" action="./index.cgi">
@@ -65,17 +65,17 @@
 
                             <div class="mqtt-field mqtt-field-host mqtt-remote-fields">
                               <label class="mqtt-label" for="MQTT_HOST"><!--$TXT_LABEL_MQTT_HOST--></label>
-                              <input spellcheck="false" type="text" name="MQTT_HOST" id="MQTT_HOST" value="<!--$MQTT_HOST_HTML-->">
+                              <input spellcheck="false" type="text" name="MQTT_HOST" id="MQTT_HOST" value="<!--$MQTT_HOST_HTML-->" placeholder="loxberry">
                             </div>
 
                             <div class="mqtt-field mqtt-field-port mqtt-remote-fields">
                               <label class="mqtt-label" for="MQTT_PORT"><!--$TXT_LABEL_MQTT_PORT--></label>
-                              <input spellcheck="false" type="text" inputmode="numeric" name="MQTT_PORT" id="MQTT_PORT" value="<!--$MQTT_PORT_HTML-->">
+                              <input spellcheck="false" type="text" inputmode="numeric" name="MQTT_PORT" id="MQTT_PORT" value="<!--$MQTT_PORT_HTML-->" placeholder="1883">
                             </div>
 
                             <div class="mqtt-field mqtt-field-username mqtt-remote-fields">
                               <label class="mqtt-label" for="MQTT_USERNAME"><!--$TXT_LABEL_MQTT_USERNAME--></label>
-                              <input spellcheck="false" type="text" name="MQTT_USERNAME" id="MQTT_USERNAME" value="<!--$MQTT_USERNAME_HTML-->">
+                              <input spellcheck="false" type="text" name="MQTT_USERNAME" id="MQTT_USERNAME" value="<!--$MQTT_USERNAME_HTML-->" placeholder="loxberry">
                             </div>
 
                             <div class="mqtt-field mqtt-field-password mqtt-remote-fields">
@@ -89,6 +89,7 @@
                             </div>
                           </div>
                           <div class="mqtt-local-hint"><!--$TXT_MQTT_LOCAL_HINT--></div>
+                          <div id="mqtt-validation-message" class="mqtt-validation-message" role="status" aria-live="polite"><!--$TXT_MQTT_HOST_UNREACHABLE--></div>
                           <script type="text/javascript">
                             $('#MQTT_MODE').val('<!--$MQTT_MODE-->');
                           </script>
@@ -264,6 +265,55 @@
 
 					$(document).on('change', '#PLUGIN_USE, #T2S_USE, #MQTT_MODE', updateMqttUi);
 
+					var mqttValidationMessageTimer = null;
+
+					function clearMqttHostValidation() {
+					  var $host = $('#MQTT_HOST');
+					  $host.removeClass('mqtt-validation-error').removeAttr('aria-invalid');
+					  $host.closest('.ui-input-text').removeClass('mqtt-validation-error');
+					}
+
+					function hideMqttValidationMessage() {
+					  if (mqttValidationMessageTimer !== null) {
+					    window.clearTimeout(mqttValidationMessageTimer);
+					    mqttValidationMessageTimer = null;
+					  }
+					  $('#mqtt-validation-message').hide();
+					}
+
+					function showMqttValidationMessage() {
+					  var $message = $('#mqtt-validation-message');
+					  if (mqttValidationMessageTimer !== null) {
+					    window.clearTimeout(mqttValidationMessageTimer);
+					  }
+					  $message.show();
+					  mqttValidationMessageTimer = window.setTimeout(function() {
+					    $message.hide();
+					    mqttValidationMessageTimer = null;
+					  }, 5000);
+					}
+
+					function markMqttHostInvalid() {
+					  var $host = $('#MQTT_HOST');
+					  $host.addClass('mqtt-validation-error').attr('aria-invalid', 'true');
+					  $host.closest('.ui-input-text').addClass('mqtt-validation-error');
+					  showMqttValidationMessage();
+					  window.setTimeout(function() {
+					    $host.trigger('focus');
+					  }, 0);
+					}
+
+					function externalMqttValidationRequired() {
+					  var pluginOn = ($('#PLUGIN_USE').val() || 'off').toLowerCase() === 'on';
+					  var t2sOn    = ($('#T2S_USE').val() || 'off').toLowerCase() === 'on';
+					  var remote   = ($('#MQTT_MODE').val() || 'local') === 'remote';
+					  return pluginOn && t2sOn && remote;
+					}
+
+					$(document).on('input change', '#MQTT_HOST, #MQTT_PORT, #MQTT_MODE, #PLUGIN_USE, #T2S_USE', function() {
+					  clearMqttHostValidation();
+					});
+
 					function updateMqttPasswordToggle(showPassword) {
 					  var $password = $('#MQTT_PASSWORD');
 					  var $toggle = $('#MQTT_PASSWORD_TOGGLE');
@@ -384,9 +434,51 @@
 					
                     function CheckConfig(save,message,title)
 					{
+						clearMqttHostValidation();
+
+						if (!externalMqttValidationRequired()) {
+							hideMqttValidationMessage();
+							continueCheckConfig(save, message, title);
+							return false;
+						}
+
+						var host = $.trim($('#MQTT_HOST').val() || '');
+						var port = $.trim($('#MQTT_PORT').val() || '') || '1883';
+
+						if (!host) {
+							markMqttHostInvalid();
+							return false;
+						}
+
+						$.ajax({
+							type: "POST",
+							dataType: "json",
+							url: "./index.cgi?do=check_mqtt_endpoint",
+							data: {
+								MQTT_HOST: host,
+								MQTT_PORT: port
+							},
+							cache: false,
+							timeout: 5000
+						}).done(function(data) {
+							if (data && Number(data.ok) === 1) {
+								hideMqttValidationMessage();
+								continueCheckConfig(save, message, title);
+							} else {
+								markMqttHostInvalid();
+							}
+						}).fail(function() {
+							markMqttHostInvalid();
+						});
+
+						return false;
+					};
+
+					function continueCheckConfig(save,message,title)
+					{
 						$('#save_data').val('1');
 
-						// 🔧 Unlock disabled fields so serializeArray() includes them
+						// Unlock disabled fields so serializeArray() includes them
 						$('#main_form input:disabled, #main_form select:disabled, #main_form textarea:disabled')
 							.prop('disabled', false);
 
@@ -413,6 +505,11 @@
 							  data: $('#main_form').serializeArray(),
 							  cache: false,
 							  success: function(data) {
+								if ($.trim(data) === '__MQTT_ENDPOINT_UNREACHABLE__') {
+								  $('#dialog').dialog("close");
+								  markMqttHostInvalid();
+								  return;
+								}
 								$('#dialog').html('<center><br/>'+data+'<br/><br/></center>');
 							  }
 							}).fail(function() {

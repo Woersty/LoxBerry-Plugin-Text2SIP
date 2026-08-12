@@ -380,6 +380,40 @@
   margin: 0 !important;
 }
 
+/* MQTT placeholders must look visibly different from actual values. */
+#main_form .t2sip-panel-mqtt input::placeholder {
+  color: #b8b8b8 !important;
+  opacity: 1 !important;
+}
+
+#main_form .t2sip-panel-mqtt input::-webkit-input-placeholder {
+  color: #b8b8b8 !important;
+  opacity: 1 !important;
+}
+
+#main_form .t2sip-panel-mqtt input::-moz-placeholder {
+  color: #b8b8b8 !important;
+  opacity: 1 !important;
+}
+
+/* External MQTT broker validation: unreachable Host/IP is highlighted clearly. */
+#main_form #MQTT_HOST.mqtt-validation-error,
+#main_form .mqtt-field-host .ui-input-text.mqtt-validation-error,
+#main_form .mqtt-field-host .ui-input-text.mqtt-validation-error input {
+  background: #c00000 !important;
+  background-color: #c00000 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: none !important;
+  caret-color: #ffffff !important;
+}
+
+#main_form #MQTT_HOST.mqtt-validation-error::placeholder,
+#main_form .mqtt-field-host .ui-input-text.mqtt-validation-error input::placeholder {
+  color: #ffffff !important;
+  opacity: 0.78 !important;
+}
+
 
 /* Password field with in-field eye toggle. */
 #main_form .mqtt-password-control {
@@ -471,10 +505,21 @@
   text-align: left;
 }
 
+#main_form .mqtt-validation-message {
+  display: none;
+  margin: 34px 4px 0 !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  color: #d00000 !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+
 /* MQTT visibility rules. Use classes + !important so jQM/CSS grid rules cannot override hiding. */
 #main_form .t2sip-panel-mqtt.mqtt-content-hidden > .t2sip-panel-title,
 #main_form .t2sip-panel-mqtt.mqtt-content-hidden > .mqtt-config-grid,
-#main_form .t2sip-panel-mqtt.mqtt-content-hidden > .mqtt-local-hint {
+#main_form .t2sip-panel-mqtt.mqtt-content-hidden > .mqtt-local-hint,
+#main_form .t2sip-panel-mqtt.mqtt-content-hidden > .mqtt-validation-message {
   display: none !important;
 }
 
