@@ -380,38 +380,28 @@
   margin: 0 !important;
 }
 
-/* MQTT placeholders must look visibly different from actual values. */
-#main_form .t2sip-panel-mqtt input::placeholder {
+/* MQTT HTML placeholders: light gray, even with jQM/WebKit theme overrides. */
+#main_form input#MQTT_HOST::placeholder,
+#main_form input#MQTT_PORT::placeholder,
+#main_form input#MQTT_USERNAME::placeholder {
   color: #b8b8b8 !important;
+  -webkit-text-fill-color: #b8b8b8 !important;
   opacity: 1 !important;
 }
 
-#main_form .t2sip-panel-mqtt input::-webkit-input-placeholder {
+#main_form input#MQTT_HOST::-webkit-input-placeholder,
+#main_form input#MQTT_PORT::-webkit-input-placeholder,
+#main_form input#MQTT_USERNAME::-webkit-input-placeholder {
   color: #b8b8b8 !important;
+  -webkit-text-fill-color: #b8b8b8 !important;
   opacity: 1 !important;
 }
 
-#main_form .t2sip-panel-mqtt input::-moz-placeholder {
+#main_form input#MQTT_HOST::-moz-placeholder,
+#main_form input#MQTT_PORT::-moz-placeholder,
+#main_form input#MQTT_USERNAME::-moz-placeholder {
   color: #b8b8b8 !important;
   opacity: 1 !important;
-}
-
-/* External MQTT broker validation: unreachable Host/IP is highlighted clearly. */
-#main_form #MQTT_HOST.mqtt-validation-error,
-#main_form .mqtt-field-host .ui-input-text.mqtt-validation-error,
-#main_form .mqtt-field-host .ui-input-text.mqtt-validation-error input {
-  background: #c00000 !important;
-  background-color: #c00000 !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
-  text-shadow: none !important;
-  caret-color: #ffffff !important;
-}
-
-#main_form #MQTT_HOST.mqtt-validation-error::placeholder,
-#main_form .mqtt-field-host .ui-input-text.mqtt-validation-error input::placeholder {
-  color: #ffffff !important;
-  opacity: 0.78 !important;
 }
 
 

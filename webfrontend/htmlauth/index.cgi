@@ -50,6 +50,7 @@ use Time::HiRes qw(gettimeofday);
 # Protokolle / Formate
 use JSON qw(decode_json encode_json);
 use Net::MQTT::Simple;
+use IO::Socket::INET;
 use Encode qw(decode_utf8 encode_utf8);
 
 # Plugin-Libs
@@ -145,6 +146,114 @@ sub as_bytes {
     my $v = shift;
     return '' unless defined $v;
     return utf8::is_utf8($v) ? encode_utf8($v) : $v;
+}
+
+# MQTT 3.1.1 Hilfsfunktionen fuer die Validierung eines externen Brokers.
+# Es wird ein echter CONNECT mit Host/IP, Port, Benutzername und Passwort
+# ausgefuehrt und der CONNACK-Code des Brokers ausgewertet.
+sub mqtt_encode_string {
+    my ($value) = @_;
+    $value = '' unless defined $value;
+    my $bytes = as_bytes($value);
+    return pack('n', length($bytes)) . $bytes;
+}
+
+sub mqtt_encode_remaining_length {
+    my ($length) = @_;
+    my $encoded = '';
+
+    do {
+        my $digit = $length % 128;
+        $length = int($length / 128);
+        $digit |= 0x80 if $length > 0;
+        $encoded .= chr($digit);
+    } while ($length > 0);
+
+    return $encoded;
+}
+
+sub mqtt_connection_valid {
+    my ($host, $port, $user, $pass) = @_;
+
+    $host = '' unless defined $host;
+    $user = '' unless defined $user;
+    $pass = '' unless defined $pass;
+
+    $host =~ s/^\s+//;
+    $host =~ s/\s+$//;
+
+    $port = 1883 unless defined $port && $port =~ /^\d+$/;
+    $port = int($port);
+
+    return 0 if $host eq '';
+    return 0 if length($host) > 253;
+    return 0 if $host =~ /\s/;
+    return 0 if $port < 1 || $port > 65535;
+
+    my $socket = IO::Socket::INET->new(
+        PeerAddr => $host,
+        PeerPort => $port,
+        Proto    => 'tcp',
+        Timeout  => 4,
+    );
+    return 0 unless $socket;
+
+    $socket->autoflush(1);
+
+    my $client_id = sprintf(
+        'text2sip-validate-%d-%d',
+        $$,
+        int(rand(1_000_000))
+    );
+
+    # Variable Header: "MQTT", Protocol Level 4 (= MQTT 3.1.1)
+    my $variable_header = mqtt_encode_string('MQTT') . chr(4);
+
+    # CONNECT Flags: Clean Session always. Username/password only if supplied.
+    my $connect_flags = 0x02;
+    $connect_flags |= 0x80 if $user ne '';
+    $connect_flags |= 0x40 if $pass ne '';
+
+    $variable_header .= chr($connect_flags) . pack('n', 10);
+
+    my $payload = mqtt_encode_string($client_id);
+    $payload .= mqtt_encode_string($user) if $user ne '';
+    $payload .= mqtt_encode_string($pass) if $pass ne '';
+
+    my $remaining_length = length($variable_header) + length($payload);
+    my $packet = chr(0x10) . mqtt_encode_remaining_length($remaining_length)
+               . $variable_header . $payload;
+
+    my $written = syswrite($socket, $packet);
+    unless (defined $written && $written == length($packet)) {
+        close $socket;
+        return 0;
+    }
+
+    my $response = '';
+    my $deadline = time() + 4;
+
+    while (length($response) < 4 && time() <= $deadline) {
+        my $buf = '';
+        my $read = sysread($socket, $buf, 4 - length($response));
+        last unless defined $read && $read > 0;
+        $response .= $buf;
+    }
+
+    # MQTT 3.1.1 CONNACK: 0x20 0x02 <session-present> <return-code>
+    my $ok = 0;
+    if (length($response) >= 4) {
+        my @b = unpack('C4', substr($response, 0, 4));
+        $ok = 1 if $b[0] == 0x20 && $b[1] == 0x02 && $b[3] == 0x00;
+    }
+
+    # Graceful DISCONNECT if authentication/connection succeeded.
+    if ($ok) {
+        eval { syswrite($socket, chr(0xE0) . chr(0x00)); };
+    }
+
+    close $socket;
+    return $ok;
 }
 
 # Temp-Dateinamen-Helfer
@@ -644,6 +753,27 @@ if ($do eq "makecall")
   }
   
   
+#--------------- External MQTT endpoint validation ---------------
+elsif ($do eq "check_mqtt_endpoint")
+{
+    print header(-type => 'application/json', -charset => 'UTF-8');
+
+    my $host = param('MQTT_HOST') // '';
+    my $port = param('MQTT_PORT') // '1883';
+    my $user = param('MQTT_USERNAME') // '';
+    my $pass = param('MQTT_PASSWORD') // '';
+
+    $host =~ s/^\s+//;
+    $host =~ s/\s+$//;
+
+    $port =~ s/[^0-9]//g;
+    $port = '1883' if $port eq '' || $port < 1 || $port > 65535;
+
+    my $ok = mqtt_connection_valid($host, $port, $user, $pass) ? 1 : 0;
+    print encode_json({ ok => $ok });
+    exit;
+}
+
 #--------------- Configuration export ---------------
 elsif ($do eq "config_export")
 {
@@ -767,11 +897,22 @@ elsif ($do eq "config_import")
 		$MQTT_MODE = param('MQTT_MODE') // 'local';
 		$MQTT_MODE = ($MQTT_MODE eq 'remote') ? 'remote' : 'local';
 		$MQTT_HOST = param('MQTT_HOST') // '';
+		$MQTT_HOST =~ s/^\s+//;
+		$MQTT_HOST =~ s/\s+$//;
 		$MQTT_PORT = param('MQTT_PORT') // '1883';
 		$MQTT_PORT =~ s/[^0-9]//g;
 		$MQTT_PORT = '1883' if $MQTT_PORT eq '' || $MQTT_PORT < 1 || $MQTT_PORT > 65535;
 		$MQTT_USERNAME = param('MQTT_USERNAME') // '';
 		$MQTT_PASSWORD = param('MQTT_PASSWORD') // '';
+
+		# Bei aktivem Text2SIP + T2S und externem Broker darf nur gespeichert werden,
+		# wenn der konfigurierte MQTT-Endpunkt vom LoxBerry aus erreichbar ist.
+		if ($PLUGIN_USE eq 'on' && defined $T2S_USE && $T2S_USE eq 'on' && $MQTT_MODE eq 'remote') {
+			unless (mqtt_connection_valid($MQTT_HOST, $MQTT_PORT, $MQTT_USERNAME, $MQTT_PASSWORD)) {
+				print "__MQTT_CONNECTION_INVALID__";
+				exit;
+			}
+		}
       our $LAST_ID                          = 0 + int(param('LAST_ID'));
       for (my $i=1; $i <= $LAST_ID; $i++)
       {

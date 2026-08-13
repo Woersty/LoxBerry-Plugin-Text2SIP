@@ -3,7 +3,7 @@
 				  <div id="dialog"></div>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/jquery-ui-1.9.2.custom.min.js"></script>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/countrySelect.min.js"></script>
-                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css?v=20260810-v20">
+                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css?v=20260810-v23">
                   <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/countrySelect.min.css">
                   <center>
                     <form autocomplete="off" method="post" data-ajax="false" name="main_form" id="main_form" action="./index.cgi">
@@ -46,8 +46,6 @@
                                   <input type="hidden" id="T2S_INSTALLED" name="T2S_INSTALLED" value="<!--$T2S_INSTALLED-->">
                                 </div>
                               </div>
-                              <div class="t2s_spacer" aria-hidden="true"></div>
-                              <div class="field_t2s_not_installed"><!--$TXT_T2S_NOT_INSTALLED--></div>
                             </div>
                           </div>
                         </div>
@@ -89,7 +87,7 @@
                             </div>
                           </div>
                           <div class="mqtt-local-hint"><!--$TXT_MQTT_LOCAL_HINT--></div>
-                          <div id="mqtt-validation-message" class="mqtt-validation-message" role="status" aria-live="polite"><!--$TXT_MQTT_HOST_UNREACHABLE--></div>
+                          <div id="mqtt-validation-message" class="mqtt-validation-message" role="status" aria-live="polite"></div>
                           <script type="text/javascript">
                             $('#MQTT_MODE').val('<!--$MQTT_MODE-->');
                           </script>
@@ -268,9 +266,7 @@
 					var mqttValidationMessageTimer = null;
 
 					function clearMqttHostValidation() {
-					  var $host = $('#MQTT_HOST');
-					  $host.removeClass('mqtt-validation-error').removeAttr('aria-invalid');
-					  $host.closest('.ui-input-text').removeClass('mqtt-validation-error');
+					  $('#MQTT_HOST').removeAttr('aria-invalid');
 					}
 
 					function hideMqttValidationMessage() {
@@ -281,23 +277,22 @@
 					  $('#mqtt-validation-message').hide();
 					}
 
-					function showMqttValidationMessage() {
+					function showMqttValidationMessage(message) {
 					  var $message = $('#mqtt-validation-message');
 					  if (mqttValidationMessageTimer !== null) {
 					    window.clearTimeout(mqttValidationMessageTimer);
 					  }
-					  $message.show();
+					  $message.html(message).show();
 					  mqttValidationMessageTimer = window.setTimeout(function() {
 					    $message.hide();
 					    mqttValidationMessageTimer = null;
-					  }, 5000);
+					  }, 8000);
 					}
 
 					function markMqttHostInvalid() {
 					  var $host = $('#MQTT_HOST');
-					  $host.addClass('mqtt-validation-error').attr('aria-invalid', 'true');
-					  $host.closest('.ui-input-text').addClass('mqtt-validation-error');
-					  showMqttValidationMessage();
+					  $host.attr('aria-invalid', 'true');
+					  showMqttValidationMessage('<!--$TXT_MQTT_CONNECTION_INVALID-->');
 					  window.setTimeout(function() {
 					    $host.trigger('focus');
 					  }, 0);
@@ -310,7 +305,7 @@
 					  return pluginOn && t2sOn && remote;
 					}
 
-					$(document).on('input change', '#MQTT_HOST, #MQTT_PORT, #MQTT_MODE, #PLUGIN_USE, #T2S_USE', function() {
+					$(document).on('input change', '#MQTT_HOST, #MQTT_PORT, #MQTT_USERNAME, #MQTT_PASSWORD, #MQTT_MODE, #PLUGIN_USE, #T2S_USE', function() {
 					  clearMqttHostValidation();
 					});
 
@@ -456,7 +451,9 @@
 							url: "./index.cgi?do=check_mqtt_endpoint",
 							data: {
 								MQTT_HOST: host,
-								MQTT_PORT: port
+								MQTT_PORT: port,
+								MQTT_USERNAME: $('#MQTT_USERNAME').val() || '',
+								MQTT_PASSWORD: $('#MQTT_PASSWORD').val() || ''
 							},
 							cache: false,
 							timeout: 5000
@@ -505,7 +502,7 @@
 							  data: $('#main_form').serializeArray(),
 							  cache: false,
 							  success: function(data) {
-								if ($.trim(data) === '__MQTT_ENDPOINT_UNREACHABLE__') {
+								if ($.trim(data) === '__MQTT_CONNECTION_INVALID__') {
 								  $('#dialog').dialog("close");
 								  markMqttHostInvalid();
 								  return;
@@ -596,7 +593,7 @@
 
 					  if (pluginUse !== 'on') {
 						$('.t2s_block').hide();
-						$('.field_t2s_not_installed').hide();
+						hideMqttValidationMessage();
 						lockLangPickerAll(false);
 						return;
 					  }
@@ -604,13 +601,18 @@
 					  $('.t2s_block').show();
 
 					  // Local Text2Speech is required only when the internal broker is used.
-					  // External mode talks directly to the configured remote broker.
+					  // The warning is shown in the common MQTT message area.
 					  var showLocalT2sHint = (
 						t2sUse === 'on' &&
 						mqttMode !== 'remote' &&
 						t2sInstalled !== 'true'
 					  );
-					  $('.field_t2s_not_installed').toggle(showLocalT2sHint);
+
+					  if (showLocalT2sHint) {
+						showMqttValidationMessage('<!--$TXT_T2S_NOT_INSTALLED-->');
+					  } else if (mqttMode !== 'remote') {
+						hideMqttValidationMessage();
+					  }
 
 					  lockLangPickerAll(t2sUse === 'on');
 					}
