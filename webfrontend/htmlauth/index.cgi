@@ -50,6 +50,7 @@ use Time::HiRes qw(gettimeofday);
 # Protokolle / Formate
 use JSON qw(decode_json encode_json);
 use Net::MQTT::Simple;
+use IO::Socket::INET;
 use Encode qw(decode_utf8 encode_utf8);
 
 # Plugin-Libs
@@ -65,7 +66,7 @@ our ($cfg,$plugin_cfg,$phrase,$phraseplugin,$lang,$template_title,$helptext,
      $installfolder,$version,$do,$psubfolder,$CONTROL_PORT,$message,$req);
 our ($pluginconfigdir,$pluginconfigfile,@language_strings,$languagefile,$languagefileplugin);
 our ($namef,$value,%query);
-our ($DEBUG_USE,$PLUGIN_USE);
+our ($DEBUG_USE,$PLUGIN_USE,$MQTT_MODE,$MQTT_HOST,$MQTT_PORT,$MQTT_USERNAME,$MQTT_PASSWORD);
 our ($logfile,$log);
 our $HOST_IP        = LoxBerry::System::get_localip();
 our $wgetbin;
@@ -73,10 +74,9 @@ our $POPUP   = '';
 our $CONFIRM = '';
 our $ffmpeg  = '/usr/bin/ffmpeg';
 
-# T2S / Bundle / MQTT
-our ($T2S_INSTALLED,$T2S_USE,$T2SminVers,$t2s_is_installed,
-     $BUNDLE_PATH,$BUNDLE_EXISTS,$bundlename,$bundle_path,$role_bridge,$ROLE_BRIDGE,$bundle);
-our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile,$CLIENT_ID,$client);
+# T2S / MQTT
+our ($T2S_INSTALLED,$T2S_USE,$T2SminVers,$t2s_is_installed);
+our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile,$client);
 
 # Pfade/Jobs/Audio
 our ($pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$cmd);
@@ -89,15 +89,15 @@ $version        = "v2025.09.09";
 $do             = "form";
 $T2S_INSTALLED  = "false";
 $T2S_USE        = "off";
-$CLIENT_ID      = "t2s-bridge";
+$MQTT_MODE      = "local";
+$MQTT_HOST      = "";
+$MQTT_PORT      = "1883";
+$MQTT_USERNAME  = "";
+$MQTT_PASSWORD  = "";
+$client         = "text2sip";
 $logfile        = "Text2SIP.log";
-$bundlename     = "t2s_bundle.tar.gz";
-$bundle_path    = 'REPLACELBHOMEDIR/config/plugins/text2sip/bridge/' . $bundlename;
-$role_bridge    = (-e '/etc/mosquitto/role/sip-bridge') ? 'true' : 'false';
 
 my $home        = File::HomeDir->my_home;
-my $hostname    = lbhostname();
-$client         = $CLIENT_ID."-".$hostname;
 
 ##########################################################################
 # Read Settings
@@ -146,6 +146,114 @@ sub as_bytes {
     my $v = shift;
     return '' unless defined $v;
     return utf8::is_utf8($v) ? encode_utf8($v) : $v;
+}
+
+# MQTT 3.1.1 Hilfsfunktionen fuer die Validierung eines externen Brokers.
+# Es wird ein echter CONNECT mit Host/IP, Port, Benutzername und Passwort
+# ausgefuehrt und der CONNACK-Code des Brokers ausgewertet.
+sub mqtt_encode_string {
+    my ($value) = @_;
+    $value = '' unless defined $value;
+    my $bytes = as_bytes($value);
+    return pack('n', length($bytes)) . $bytes;
+}
+
+sub mqtt_encode_remaining_length {
+    my ($length) = @_;
+    my $encoded = '';
+
+    do {
+        my $digit = $length % 128;
+        $length = int($length / 128);
+        $digit |= 0x80 if $length > 0;
+        $encoded .= chr($digit);
+    } while ($length > 0);
+
+    return $encoded;
+}
+
+sub mqtt_connection_valid {
+    my ($host, $port, $user, $pass) = @_;
+
+    $host = '' unless defined $host;
+    $user = '' unless defined $user;
+    $pass = '' unless defined $pass;
+
+    $host =~ s/^\s+//;
+    $host =~ s/\s+$//;
+
+    $port = 1883 unless defined $port && $port =~ /^\d+$/;
+    $port = int($port);
+
+    return 0 if $host eq '';
+    return 0 if length($host) > 253;
+    return 0 if $host =~ /\s/;
+    return 0 if $port < 1 || $port > 65535;
+
+    my $socket = IO::Socket::INET->new(
+        PeerAddr => $host,
+        PeerPort => $port,
+        Proto    => 'tcp',
+        Timeout  => 4,
+    );
+    return 0 unless $socket;
+
+    $socket->autoflush(1);
+
+    my $client_id = sprintf(
+        'text2sip-validate-%d-%d',
+        $$,
+        int(rand(1_000_000))
+    );
+
+    # Variable Header: "MQTT", Protocol Level 4 (= MQTT 3.1.1)
+    my $variable_header = mqtt_encode_string('MQTT') . chr(4);
+
+    # CONNECT Flags: Clean Session always. Username/password only if supplied.
+    my $connect_flags = 0x02;
+    $connect_flags |= 0x80 if $user ne '';
+    $connect_flags |= 0x40 if $pass ne '';
+
+    $variable_header .= chr($connect_flags) . pack('n', 10);
+
+    my $payload = mqtt_encode_string($client_id);
+    $payload .= mqtt_encode_string($user) if $user ne '';
+    $payload .= mqtt_encode_string($pass) if $pass ne '';
+
+    my $remaining_length = length($variable_header) + length($payload);
+    my $packet = chr(0x10) . mqtt_encode_remaining_length($remaining_length)
+               . $variable_header . $payload;
+
+    my $written = syswrite($socket, $packet);
+    unless (defined $written && $written == length($packet)) {
+        close $socket;
+        return 0;
+    }
+
+    my $response = '';
+    my $deadline = time() + 4;
+
+    while (length($response) < 4 && time() <= $deadline) {
+        my $buf = '';
+        my $read = sysread($socket, $buf, 4 - length($response));
+        last unless defined $read && $read > 0;
+        $response .= $buf;
+    }
+
+    # MQTT 3.1.1 CONNACK: 0x20 0x02 <session-present> <return-code>
+    my $ok = 0;
+    if (length($response) >= 4) {
+        my @b = unpack('C4', substr($response, 0, 4));
+        $ok = 1 if $b[0] == 0x20 && $b[1] == 0x02 && $b[3] == 0x00;
+    }
+
+    # Graceful DISCONNECT if authentication/connection succeeded.
+    if ($ok) {
+        eval { syswrite($socket, chr(0xE0) . chr(0x00)); };
+    }
+
+    close $socket;
+    return $ok;
 }
 
 # Temp-Dateinamen-Helfer
@@ -254,7 +362,7 @@ if (defined $ENV{'QUERY_STRING'} && $ENV{'QUERY_STRING'} ne '') {
     ${$template_string} = decode('UTF-8', $phraseplugin->param($template_string));
   }
   
-	#**************************************** Added by OL (Bundle check + conditional SIP install) ************************************
+	#**************************************** Text2Speech plugin detection ************************************
 
 	# (1) Detect if Text2Speech (T2S) plugin is installed
 	$T2SminVers    = '1.6.0';        # optional version check
@@ -276,7 +384,7 @@ if (defined $ENV{'QUERY_STRING'} && $ENV{'QUERY_STRING'} ne '') {
 	
 	# --- Tum Testen ---
 	#$T2S_INSTALLED = "true";
-	#************************************ End of added by OL (Bundle check + conditional SIP install) ************************************
+	#************************************ End Text2Speech plugin detection ************************************
 
 	  
 ##########################################################################
@@ -533,7 +641,7 @@ if ($do eq "makecall")
 
     if ($cfg_flag eq 'on') {
         our $t2s_suppress_fallback = 0;   # Standard = kein Suppress
-        &t2svoice();   # T2S (MQTT/mTLS oder lokal)
+        &t2svoice();   # T2S via internal or external MQTT broker
 
         if ( !$t2s_suppress_fallback && ( !-e $pluginwavfile || -s $pluginwavfile <= 0 ) ) {
             system('echo "## ROUTE: t2svoice produced no WAV -> fallback to Pico" >> ' . $lbplogdir . '/' . $logfile);
@@ -558,7 +666,7 @@ if ($do eq "makecall")
     # ---------------------------------------------------------------
     my $arch      = `dpkg --print-architecture 2>/dev/null`;
     chomp $arch;
-    my $pjsua_bin = "$pluginbindir/pjsua-$arch";
+    my $pjsua_bin = "$installfolder/data/plugins/$psubfolder/$arch/pjsua-$arch";
     my $driver    = "$pluginbindir/pjsua_call.pl";
 
     # Ohne passendes Binary kaeme der Anruf ohne erkennbaren Grund nicht zustande.
@@ -645,75 +753,26 @@ if ($do eq "makecall")
   }
   
   
-#--------------- T2S Status JSON ---------------
-elsif ($do eq "get_t2s_status")
+#--------------- External MQTT endpoint validation ---------------
+elsif ($do eq "check_mqtt_endpoint")
 {
-    use utf8;
-    binmode STDOUT, ':encoding(UTF-8)';
     print header(-type => 'application/json', -charset => 'UTF-8');
 
-    my $role_bridge = "/etc/mosquitto/role/sip-bridge";
-    my $healthfile  = "REPLACELBHOMEDIR/log/plugins/text2sip/health.json";
-    my %result      = ( mode => "local" );
+    my $host = param('MQTT_HOST') // '';
+    my $port = param('MQTT_PORT') // '1883';
+    my $user = param('MQTT_USERNAME') // '';
+    my $pass = param('MQTT_PASSWORD') // '';
 
-    # Wenn Bridge-Rolle erkannt
-    if (-e $role_bridge) {
-        $result{mode} = "bridge";
+    $host =~ s/^\s+//;
+    $host =~ s/\s+$//;
 
-        if (-f $healthfile) {
-            eval {
-                require JSON;
-                require File::Slurp;
-                require Time::Piece;
+    $port =~ s/[^0-9]//g;
+    $port = '1883' if $port eq '' || $port < 1 || $port > 65535;
 
-                my $rawfile = File::Slurp::read_file($healthfile);
-                my $data    = JSON::decode_json($rawfile);
-
-                if ($data->{last_handshake}) {
-
-                    my $raw = $data->{last_handshake};
-                    my $tp;
-
-                    # ---------------------------------------------------
-                    # 1. ISO 8601 Versuch: 2025-11-13T11:45:02+01:00
-                    # ---------------------------------------------------
-                    eval {
-                        $tp = Time::Piece->strptime($raw, '%Y-%m-%dT%H:%M:%S');
-                    };
-
-                    # ---------------------------------------------------
-                    # 2. Classic Format: 2025-11-13 11:45:02
-                    # ---------------------------------------------------
-                    if (!$tp) {
-                        eval {
-                            $tp = Time::Piece->strptime($raw, '%Y-%m-%d %H:%M:%S');
-                        };
-                    }
-
-                    # ---------------------------------------------------
-                    # 3. Format für UI
-                    # ---------------------------------------------------
-                    if ($tp) {
-                        # [YYYY-MM-DD] HH:MM:SS
-                        my $pretty = sprintf(
-                            '[%04d-%02d-%02d] %02d:%02d:%02d',
-                            $tp->year, $tp->mon, $tp->mday,
-                            $tp->hour, $tp->min, $tp->sec
-                        );
-
-                        $result{last} = $pretty;
-                        $result{age}  = time - $tp->epoch;
-                    }
-                }
-            };
-        }
-    }
-
-    require JSON;
-    print JSON::encode_json(\%result);
+    my $ok = mqtt_connection_valid($host, $port, $user, $pass) ? 1 : 0;
+    print encode_json({ ok => $ok });
     exit;
 }
-
 
 #--------------- Configuration export ---------------
 elsif ($do eq "config_export")
@@ -834,6 +893,26 @@ elsif ($do eq "config_import")
 
 		$DEBUG_USE = param('DEBUG_USE');
 		if ( $DEBUG_USE ne "on" ) { $DEBUG_USE = "off"; }
+
+		$MQTT_MODE = param('MQTT_MODE') // 'local';
+		$MQTT_MODE = ($MQTT_MODE eq 'remote') ? 'remote' : 'local';
+		$MQTT_HOST = param('MQTT_HOST') // '';
+		$MQTT_HOST =~ s/^\s+//;
+		$MQTT_HOST =~ s/\s+$//;
+		$MQTT_PORT = param('MQTT_PORT') // '1883';
+		$MQTT_PORT =~ s/[^0-9]//g;
+		$MQTT_PORT = '1883' if $MQTT_PORT eq '' || $MQTT_PORT < 1 || $MQTT_PORT > 65535;
+		$MQTT_USERNAME = param('MQTT_USERNAME') // '';
+		$MQTT_PASSWORD = param('MQTT_PASSWORD') // '';
+
+		# Bei aktivem Text2SIP + T2S und externem Broker darf nur gespeichert werden,
+		# wenn der konfigurierte MQTT-Endpunkt vom LoxBerry aus erreichbar ist.
+		if ($PLUGIN_USE eq 'on' && defined $T2S_USE && $T2S_USE eq 'on' && $MQTT_MODE eq 'remote') {
+			unless (mqtt_connection_valid($MQTT_HOST, $MQTT_PORT, $MQTT_USERNAME, $MQTT_PASSWORD)) {
+				print "__MQTT_CONNECTION_INVALID__";
+				exit;
+			}
+		}
       our $LAST_ID                          = 0 + int(param('LAST_ID'));
       for (my $i=1; $i <= $LAST_ID; $i++)
       {
@@ -928,18 +1007,20 @@ elsif ($do eq "config_import")
 	  $plugin_cfg->param('default.LAST_ID'    ,$LAST_ID    );
       $plugin_cfg->param('default.PLUGIN_USE' ,"$PLUGIN_USE" );
 	  
-	  #**************************** Added by OL ***************************************
 	  $plugin_cfg->param('default.T2S_USE' ,"$T2S_USE" );
-	  $plugin_cfg->param('default.BRIDGE_USER' ,"$client" );
-	  #********************************************************************************
 	  
+      $plugin_cfg->param('default.MQTT_MODE'     ,"$MQTT_MODE" );
+      $plugin_cfg->param('default.MQTT_HOST'     ,as_bytes($MQTT_HOST) );
+      $plugin_cfg->param('default.MQTT_PORT'     ,"$MQTT_PORT" );
+      $plugin_cfg->param('default.MQTT_USERNAME' ,as_bytes($MQTT_USERNAME) );
+      $plugin_cfg->param('default.MQTT_PASSWORD' ,as_bytes($MQTT_PASSWORD) );
+
       $plugin_cfg->param('default.DEBUG_USE' ,"$DEBUG_USE" );
 	  
 	  my $version = LoxBerry::System::pluginversion();
 	  $plugin_cfg->param('default.INSTALLED_VERSION', $version);
 	  
-	  install_sip_bridge($T2S_INSTALLED, $T2S_USE, $client);
-	  	  
+	  
 		if ( $plugin_cfg->write($pluginconfigfile) ) {
 			print "\n<br/>" . $phraseplugin->param('TXT_SAVE_DIALOG_OK');
 			print "\n<script> setTimeout( function() { location.reload(true); }, 1500); </script>\n";
@@ -1029,6 +1110,15 @@ elsif ($do eq "config_import")
 	#********************** Added by OL ***********************************
 	our $T2S_USE                     	= "off";
 	#**********************************************************************
+    our $MQTT_MODE                      = "local";
+    our $MQTT_HOST                      = "";
+    our $MQTT_PORT                      = "1883";
+    our $MQTT_USERNAME                  = "";
+    our $MQTT_PASSWORD                  = "";
+    our $MQTT_HOST_HTML                 = "";
+    our $MQTT_PORT_HTML                 = "1883";
+    our $MQTT_USERNAME_HTML             = "";
+    our $MQTT_PASSWORD_HTML             = "";
     our $DEBUG_USE                      = "off";
     our $P2W_Text                       = "";
     our $SIPCMD_CALLING_USER_NUMBER     = "";
@@ -1047,12 +1137,14 @@ elsif ($do eq "config_import")
       {
         $LAST_ID                          =  $plugin_cfg->param('default.LAST_ID'                     );
         $PLUGIN_USE                       =  $plugin_cfg->param('default.PLUGIN_USE'                  );
-		#**************************************** Added by OL *********************************************
-		$T2S_USE                       	  =  $plugin_cfg->param('default.T2S_USE'                  );
-		$BUNDLE_PATH   					  =  $bundle_path;
-		$BUNDLE_EXISTS 					  =  (-f $bundle_path) ? "true" : "false";
-		$ROLE_BRIDGE					  =  $role_bridge;
-		#**************************************************************************************************
+		$T2S_USE = $plugin_cfg->param('default.T2S_USE');
+        $MQTT_MODE                        =  $plugin_cfg->param('default.MQTT_MODE') // 'local';
+        $MQTT_MODE                        =  ($MQTT_MODE eq 'remote') ? 'remote' : 'local';
+        $MQTT_HOST                        =  as_chars($plugin_cfg->param('default.MQTT_HOST') // '');
+        $MQTT_PORT                        =  $plugin_cfg->param('default.MQTT_PORT') // '1883';
+        $MQTT_PORT                        =  '1883' if $MQTT_PORT !~ /^\d+$/ || $MQTT_PORT < 1 || $MQTT_PORT > 65535;
+        $MQTT_USERNAME                    =  as_chars($plugin_cfg->param('default.MQTT_USERNAME') // '');
+        $MQTT_PASSWORD                    =  as_chars($plugin_cfg->param('default.MQTT_PASSWORD') // '');
         $DEBUG_USE                        =  $plugin_cfg->param('default.DEBUG_USE'                   );
         for ($vg_id=1; $vg_id <= $LAST_ID; $vg_id++)
         {
@@ -1096,6 +1188,12 @@ elsif ($do eq "config_import")
         }
       }
 	  	  
+	      # MQTT-Werte fuer HTML-Attribute separat escapen; Rohwerte bleiben fuer spaetere Runtime-Nutzung erhalten.
+          $MQTT_HOST_HTML     = escapeHTML($MQTT_HOST // '');
+          $MQTT_PORT_HTML     = escapeHTML($MQTT_PORT // '1883');
+          $MQTT_USERNAME_HTML = escapeHTML($MQTT_USERNAME // '');
+          $MQTT_PASSWORD_HTML = escapeHTML($MQTT_PASSWORD // '');
+
       # Parse the strings we want
       open(F,"$installfolder/templates/plugins/$psubfolder/settings.html") || die "Missing template plugins/$psubfolder/settings.html";
       while (<F>)
@@ -1114,6 +1212,50 @@ elsif ($do eq "config_import")
   }
   
   
+
+##########################################################################
+# MQTT connection resolver for T2S
+# - local  : use the MQTT broker configured by LoxBerry itself
+# - remote : use host/port/credentials from Text2SIP.cfg
+##########################################################################
+
+sub get_t2s_mqtt_connection {
+    our $plugin_cfg;
+
+    my $mode = eval { $plugin_cfg->param('default.MQTT_MODE') } // 'local';
+    $mode = lc(as_chars($mode));
+    $mode =~ s/^\s+|\s+$//g;
+    $mode = ($mode eq 'remote') ? 'remote' : 'local';
+
+    if ($mode eq 'remote') {
+        my $host = as_chars(eval { $plugin_cfg->param('default.MQTT_HOST') } // '');
+        my $port = eval { $plugin_cfg->param('default.MQTT_PORT') } // '1883';
+        my $user = as_chars(eval { $plugin_cfg->param('default.MQTT_USERNAME') } // '');
+        my $pass = as_chars(eval { $plugin_cfg->param('default.MQTT_PASSWORD') } // '');
+
+        $host =~ s/^\s+|\s+$//g;
+        $user =~ s/^\s+|\s+$//g;
+        $port = '1883' if !defined($port) || $port !~ /^\d+$/ || $port < 1 || $port > 65535;
+
+        return {
+            mode => 'remote',
+            host => $host,
+            port => int($port),
+            user => $user,
+            pass => $pass,
+        };
+    }
+
+    my $cred = LoxBerry::IO::mqtt_connectiondetails();
+    return {
+        mode => 'local',
+        host => $cred->{brokerhost} // '127.0.0.1',
+        port => $cred->{brokerport} // 1883,
+        user => $cred->{brokeruser} // '',
+        pass => $cred->{brokerpass} // '',
+    };
+}
+
 
 ##########################################################################
 # Use t2svoice for voice
@@ -1153,14 +1295,17 @@ sub t2svoice {
     # 1) Basic TTS parameters / sanity checks
     # ----------------------------------------------------------------------
     our $client;
-    $client //= "t2s-bridge-unknown";
+    $client //= "text2sip";
 
     my $req_topic  = "tts-publish/$client";
     my $resp_topic = "tts-subscribe/$client";
+    my ($corr_sec, $corr_usec) = gettimeofday();
+    my $corr = sprintf("text2sip-%d-%06d-%d", $corr_sec, $corr_usec, $$);
 
     $log->("## Using client='$client'");
     $log->("## Request topic  = $req_topic");
     $log->("## Response topic = $resp_topic");
+    $log->("## Correlation ID = $corr");
 
     # Ensure text exists, otherwise Pico fallback
     $P2W_Text //= '';
@@ -1172,7 +1317,7 @@ sub t2svoice {
     }
 
     # ----------------------------------------------------------------------
-    # 2) Build payload (NO corr ANYMORE)
+    # 2) Build payload with per-request correlation ID
     # ----------------------------------------------------------------------
     my $payload_json = encode_json({
         text     => "$P2W_Text",
@@ -1180,13 +1325,14 @@ sub t2svoice {
         logging  => 1,
         mp3files => 0,
         client   => $client,
+        corr     => $corr,
         reply_to => $resp_topic,
     });
 
-    $log->("## T2S payload prepared (without corr)");
+    $log->("## T2S payload prepared with corr='$corr'");
 
     # ----------------------------------------------------------------------
-    # 3) Response parser (generic, no corr matching)
+    # 3) Response parser with strict correlation matching
     # ----------------------------------------------------------------------
     my $parse_response = sub {
         my ($msg) = @_;
@@ -1198,6 +1344,12 @@ sub t2svoice {
         }
 
         my $r = $d->{response} // $d;
+
+        my $response_corr = defined $r->{corr} ? "$r->{corr}" : '';
+        if ($response_corr eq '' || $response_corr ne $corr) {
+            $log->("## Ignoring T2S response with foreign/missing corr='$response_corr' (expected '$corr')");
+            return undef;
+        }
 
         # Master-level error
         if (defined $r->{status} && $r->{status} eq 'error') {
@@ -1222,29 +1374,36 @@ sub t2svoice {
     };
 
     # ----------------------------------------------------------------------
-    # 4) Connect to local MQTT broker (bridge → master)
+    # 4) Resolve MQTT broker and connect
+    #    local  -> LoxBerry MQTT settings
+    #    remote -> Text2SIP host/port/credentials
     # ----------------------------------------------------------------------
-    $log->("## Using local MQTT broker (will be bridged to master)");
+    my $mqtt_cfg = get_t2s_mqtt_connection();
+    my $mqtt_mode = $mqtt_cfg->{mode} // 'local';
+    my $host      = $mqtt_cfg->{host} // '';
+    my $port      = $mqtt_cfg->{port} // 1883;
+    my $user      = $mqtt_cfg->{user} // '';
+    my $pass      = $mqtt_cfg->{pass} // '';
 
-    my ($host, $port, $user, $pass) = do {
-        my $cred = LoxBerry::IO::mqtt_connectiondetails();
-        (
-            $cred->{brokerhost} // '127.0.0.1',
-            $cred->{brokerport} // 1883,
-            $cred->{brokeruser} // '',
-            $cred->{brokerpass} // '',
-        );
-    };
+    if ($mqtt_mode eq 'remote') {
+        if ($host eq '') {
+            $log->("## ERROR: External MQTT broker selected but host is empty – using Pico fallback");
+            return usepico();
+        }
+        $log->("## Using external MQTT broker $host:$port");
+    } else {
+        $log->("## Using internal LoxBerry MQTT broker $host:$port");
+    }
 
     $ENV{MQTT_SIMPLE_ALLOW_INSECURE_LOGIN} = 1;
 
     my $mqtt;
     eval {
         $mqtt = Net::MQTT::Simple->new("$host:$port");
-        $mqtt->login($user, $pass) if $user || $pass;
+        $mqtt->login($user, $pass) if $user ne '' || $pass ne '';
         1;
     } or do {
-        $log->("## MQTT connect/login failed – using Pico fallback");
+        $log->("## MQTT connect/login failed for $mqtt_mode broker – using Pico fallback");
         return usepico();
     };
 
@@ -1271,7 +1430,7 @@ sub t2svoice {
 
         return unless $parsed;
 
-        # NO corr matching anymore – first valid response wins
+        # Parser already verified that the response belongs to this request.
         $reply = $parsed;
     });
 
@@ -1287,7 +1446,7 @@ sub t2svoice {
     $mqtt->publish($req_topic, $payload_json);
 
     # ----------------------------------------------------------------------
-    # 8) Wait for response (or timeout) — NO ABORT ANYMORE
+    # 8) Wait for the matching response (or timeout)
     # ----------------------------------------------------------------------
     my $end = time + $RESP_TIMEOUT;
 
@@ -1571,34 +1730,6 @@ sub usetts
     job_log_end();
 }
 
-# ==========================================================
-# Text2SIP: install SIP bridge if T2S_USE = ON and T2S exists
-# ==========================================================
-
-sub install_sip_bridge {
-    my ($T2S_INSTALLED, $T2S_USE, $client) = @_;
-
-    # Globale Variablen aus Header
-    our ($bundle_path, $bundlename);
-
-    my $installer = 'REPLACELBHOMEDIR/webfrontend/htmlauth/plugins/text2sip/bin/install_sip_client.pl';
-    my $logfile   = 'REPLACELBHOMEDIR/log/plugins/text2sip/client_install.log';
-
-    # Bridge enabled?
-    return unless ($T2S_USE // '') =~ /^(?:1|on|true|yes)$/i;
-
-    # T2S Master NOT installed on SIP client
-    return unless ($T2S_INSTALLED // '') =~ /^(?:0|off|false|no)$/i;
-
-    # Bundle + installer present
-    return unless -r $bundle_path && -f $installer;
-
-    # Installer starten mit --user Übergabe
-    system("$^X '$installer' --bundle '$bundle_path' --user '$client' >>'$logfile' 2>&1");
-}
-
-
-
 #####################################################
 # Secret masking 
 #####################################################
@@ -1628,42 +1759,6 @@ sub mask_hash {
         }
     }
     return \%c;
-}
-
-sub _read_master_ip_from_tar {
-    my ($tar) = @_;
-    return undef unless defined $tar && -r $tar;
-
-    # Find master.info (top or subfolder)
-    my $list = `tar -tzf '$tar' 2>/dev/null`;
-    my $rc   = $?;
-    return undef if $rc != 0 || !$list;
-
-    my $mi_path;
-    if ($list =~ m{^(.*?/)?master\.info\s*$}m) {
-        $mi_path = ($1 // '') . 'master.info';
-        $mi_path =~ s{^\./}{};
-    } else {
-        _dbg('WARN', 'master.info not found in bundle');
-        return undef;
-    }
-
-    # Extract and parse MASTER_IP
-    my $info = `tar -xOf '$tar' '$mi_path' 2>/dev/null`;
-    $rc = $?;
-    return undef if $rc != 0 || !$info;
-
-    for my $line (split /\R/, $info) {
-        next if $line =~ /^\s*#/;
-        if ($line =~ /^\s*MASTER_IP\s*[:=]\s*(\d{1,3}(?:\.\d{1,3}){3})\s*$/) {
-            my $ip = $1;
-            _dbg('INFO', "Parsed MASTER_IP=$ip from master.info");
-            return $ip;
-        }
-    }
-
-    _dbg('WARN', 'No MASTER_IP line found in master.info');
-    return undef;
 }
 
 sub _ts {

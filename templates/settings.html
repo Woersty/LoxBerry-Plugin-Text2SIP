@@ -1,256 +1,125 @@
-		<style>
-			/* Die obere Leiste soll nicht schmaler werden als der Ansagen-Block
-			   darunter. Dessen Mindestbreite ergibt sich aus Beschriftungen, die
-			   nicht umbrechen duerfen, ist also nicht fest berechenbar - dieser
-			   Wert liegt bewusst knapp darunter. */
-			.t2s-topbar { min-width: 1000px; }
 
-			/* Kopf-Buttons (Konfiguration/Protokolldatei) mittig im Rahmen –
-			   jQM-Block-Buttons zentrieren sich nur ueber margin:auto. */
-			#btnshwlog, #btndwllog, #btnemptylog, #btncfgexport, #btncfgimport {
-			  margin-left: auto !important;
-			  margin-right: auto !important;
-			}
-
-			/* ===============================
-			   Gesamter Block
-			   =============================== */
-			.plugin-config-box {
-			  width: 100%;             /* schrumpft mit, statt 480px zu erzwingen */
-			  max-width: 480px;        /* Gesamtbreite des Blocks */
-			  box-sizing: border-box;
-			}
-
-			.plugin-config-table {
-			  width: 100%;
-			  border-collapse: collapse;      /* keine Zellzwischenräume */
-			  table-layout: auto;             /* auto reicht hier; fixed nur bei harten Breiten nötig */
-			}
-
-			/* Alle Zellen: Standard-Padding neutralisieren */
-			.plugin-config-box td {
-			  padding: 0;                      /* wichtig: Theme-Padding entfernen */
-			}
-
-			/* ===============================
-			   Tabellenlayout
-			   =============================== */
-
-			/* Linke Spalte (Labels) */
-			.plugin-config-box td.label {
-			  width: 120px;                    /* steuert, wie weit der Switch rechts sitzt */
-			  vertical-align: middle;
-			  font-weight: normal;
-			  font-size: 0.9em;
-			  white-space: nowrap;             /* Label einzeilig */
-			  line-height: 1.3em;
-			  color: #333;
-			  padding-right: 5px;              /* HIER: nur 5px Abstand zum Switch */
-			}
-
-			/* Rechte Spalte (Switches/Controls) */
-			.plugin-config-box td.control {
-			  vertical-align: middle;
-			  padding-left: 0;                 /* kein zusätzlicher Abstand von rechts */
-			}
-
-			/* ===============================
-			   Flipswitch / Slider (jQuery Mobile)
-			   =============================== */
-
-			/* jQM gibt oft einen linken Außenabstand – entfernen */
-			.plugin-config-box .ui-flipswitch,
-			.plugin-config-box .ui-slider,
-			.plugin-config-box select[data-role="slider"] {
-			  max-width: 140px;
-			  margin-left: 0 !important;       /* näher ans Label */
-			}
-
-			/* ===============================
-			   Link-Zeile unter dem Switch
-			   =============================== */
-			.plugin-config-box .t2s-link-cell {
-			  padding-top: 4px;
-			  padding-left: 0;                  /* bündig mit Switch */
-			}
-			.plugin-config-box .t2s-link {
-			  white-space: nowrap;
-			  font-size: 0.9em;
-			}
-
-			/* ===============================
-			   IP-Label + Feld
-			   =============================== */
-			.plugin-config-box .ip-label {
-			  font-weight: normal;
-			  font-size: 0.8em;
-			  line-height: 1.4em;
-			  padding: 6px 0 4px 0;
-			  color: #333;
-			  white-space: normal;
-			}
-
-			.plugin-config-box .ip-field { text-align: left; }
-
-			/* Wrapper bestimmt die tatsächliche Eingabefeld-Breite */
-			.plugin-config-box .ip-field-inner {
-			  display: inline-block;
-			  width: 260px;                    /* Feldbreite hier einstellen */
-			}
-			.plugin-config-box .ip-field-inner input#T2S_IP {
-			  width: 100%;
-			  padding: 6px;
-			  font-size: 0.9em;
-			  box-sizing: border-box;
-			}
-
-			/* ===============================
-			   Optional: responsiv
-			   =============================== */
-			@media (max-width: 640px) {
-			  .plugin-config-box { width: 100%; max-width: none; }
-			  .plugin-config-box td.label { width: 55%; }
-			}
-			
-		</style>
 				  
 				  <div id="dialog"></div>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/jquery-ui-1.9.2.custom.min.js"></script>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/countrySelect.min.js"></script>
-                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css">
+                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css?v=20260810-v23">
                   <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/countrySelect.min.css">
                   <center>
                     <form autocomplete="off" method="post" data-ajax="false" name="main_form" id="main_form" action="./index.cgi">
-                    <table width="100%" class="t2s-topbar" style="background: rgba(255,255,192, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
-                      <tr>
-                        <td width="200px" valign="top">
-						<!-- **************************************** Added/changed by OL ************************************ -->
-						<div class="plugin-config-box">
-						<!-- === Gesamter Text2Speech-Bereich (ein-/ausblendbar über JS) === -->
-						<table class="plugin-config-table">
-						  <tbody>
-							<!-- Plugin aktiv -->
-							<tr>
-							  <td class="label"><!--$TXT_LABEL_PLUGIN_USE--></td>
-							  <td class="control">
-								<select name="PLUGIN_USE" id="PLUGIN_USE" data-role="slider" data-mini="true">
-								  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
-								  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
-								</select>
-							  </td>
-							</tr>
-						  </tbody>
+                    <div class="t2s-topbar">
+                      <!-- Plugin-Info bewusst als eigener Block ueber den Einstellungen -->
+                      <div class="t2sip-hero">
+                        <img src="/system/images/icons/<!--$psubfolder-->/icon_64.png"><br/>
+                        <b><!--$MY_NAME--></b><br/>
+                        <small><!--$PLUGIN_DESCRIPTION--></small>
+                        <div class="t2sip-hero-actions">
+                          <a id="btncancel" data-role="button" data-inline="true" data-mini="true" data-icon="delete" href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a>
+                          <a id="btnsavecfg" data-inline="true" data-icon="check" data-role="button" data-mini="true" target="_self"
+                             onclick="CheckConfig(1,'<br/><br/><table cellpadding=10><tr><td><img src=&quot;/plugins/<!--$psubfolder-->/ico_tools.png&quot;></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->');"><!--$TXT_BTN_SAVE--></a>
+                        </div>
+                      </div>
 
-						  <!-- === Gesamter T2S-Bereich (ein-/ausblendbar) === -->
-						  <tbody class="t2s_block">
-							<!-- Text2Speech aktiv -->
-							<tr class="field_t2s">
-							  <td class="label"><!--$TXT_LABEL_T2S_USE--></td>
-							  <td class="control">
-								<select name="T2S_USE" id="T2S_USE" data-role="slider" data-mini="true">
-								  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
-								  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
-								</select>
-								<input type="hidden" id="T2S_INSTALLED" name="T2S_INSTALLED" value="<!--$T2S_INSTALLED-->">
-								<input type="hidden" id="t2s_bundle_exists" value="<!--$BUNDLE_EXISTS-->">
-								<input type="hidden" id="role_bridge" value="<!--$ROLE_BRIDGE-->">
-							  </td>
-							</tr>
-							<tr class="t2s_spacer">
-							  <td colspan="2" style="height:18px;"></td>
-							</tr>
+                      <!-- Drei Hauptbereiche nebeneinander: Plugin | MQTT | Verwaltung -->
+                      <div class="t2sip-settings-row">
+                        <div class="t2sip-panel t2sip-panel-plugin">
+                          <div class="t2sip-panel-title"><!--$TXT_BTN_BLOCK_PLUGIN--></div>
+                          <div class="plugin-config-box">
+                            <div class="plugin-config-row">
+                              <div class="plugin-config-label"><!--$TXT_LABEL_PLUGIN_USE--></div>
+                              <div class="plugin-config-control">
+                                <select name="PLUGIN_USE" id="PLUGIN_USE" data-role="slider" data-mini="true">
+                                  <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+                                  <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+                                </select>
+                              </div>
+                            </div>
 
-							<!-- Hinweis, wenn T2S nicht installiert -->
-							<tr class="field_t2s_not_installed" style="display:none;">
-							  <td colspan="2" style="color:#a00; font-style:italic;">
-								<!--$TXT_T2S_NOT_INSTALLED-->
-							  </td>
-							</tr>
+                            <div class="t2s_block">
+                              <div class="plugin-config-row field_t2s">
+                                <div class="plugin-config-label"><!--$TXT_LABEL_T2S_USE--></div>
+                                <div class="plugin-config-control">
+                                  <select name="T2S_USE" id="T2S_USE" data-role="slider" data-mini="true">
+                                    <option value="off"><!--$TXT_LABEL_PLUGIN_USE_OFF--></option>
+                                    <option value="on"><!--$TXT_LABEL_PLUGIN_USE_ON--></option>
+                                  </select>
+                                  <input type="hidden" id="T2S_INSTALLED" name="T2S_INSTALLED" value="<!--$T2S_INSTALLED-->">
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-							<!-- Detail-Information -->
-							<tr class="t2s-mode-detail-row" style="display:none;">
-							  <td colspan="2"
-								  style="padding-top:0; font-size:0.9em; color:#555; line-height:1.4em;">
-								<!-- Dieser Container wird per JS dynamisch befüllt -->
-								<div class="t2s-mode-detail" style="font-weight:normal;"></div>
+                        <div class="t2sip-panel t2sip-panel-mqtt">
+                          <div class="t2sip-panel-title"><!--$TXT_BTN_BLOCK_MQTT--></div>
+                          <div class="mqtt-config-grid">
+                            <div class="mqtt-field mqtt-field-mode">
+                              <label class="mqtt-label" for="MQTT_MODE"><!--$TXT_LABEL_MQTT_MODE--></label>
+                              <select name="MQTT_MODE" id="MQTT_MODE" data-role="none">
+                                <option value="local"><!--$TXT_LABEL_MQTT_MODE_LOCAL--></option>
+                                <option value="remote"><!--$TXT_LABEL_MQTT_MODE_REMOTE--></option>
+                              </select>
+                            </div>
 
-								<!-- Optional: echtes Handshake-Datum zwischenspeichern -->
-								<input type="hidden" id="T2S_HANDSHAKE" name="T2S_HANDSHAKE" value="">
-							  </td>
-							</tr>
-						  </tbody>
-						</table>
-						<!-- **************************************** End of Added by OL ************************************ -->
-                        </td>
-                        <td align="center"><img src="/system/images/icons/<!--$psubfolder-->/icon_64.png"><br/><b><!--$MY_NAME--></b><br/><small><!--$PLUGIN_DESCRIPTION--></small>
-                        <table style="width:auto; margin:0 auto;">
-						  <tr>
-							<td>
-							  <a style="width:180px;"
-								 id="btncancel"
-								 data-role="button"
-								 data-inline="true"
-								 data-mini="true"
-								 data-icon="delete"
-								 href="/admin/index.cgi"><!--$TXT_BTN_CANCEL--></a>
-							</td>
-							<td>
-							  <a style="width:180px;"
-								 id="btnsavecfg"
-									 data-inline="true"
-								 data-icon="check"
-								 data-role="button"
-								 data-mini="true"
-								 target="_self"
-								 onclick="CheckConfig(1,
-								   '<br/><br/><table cellpadding=10><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_tools.png\'></td><td><!--$TXT_SAVE_CFG_DIALOG_TEXT--></td></tr></table><br/>',
-								   '<!--$MY_NAME--> - <!--$TXT_SAVE_CFG_DIALOG_TITLE-->'
-								 );">
-								 <!--$TXT_BTN_SAVE-->
-							  </a>
-							</td>
-						  </tr>
-						</table>
-                        </td>
-                        <td width="200px" style="height:1px;">
-                          <table align="center" style="width:100%; min-width:200px; height:100%; background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
-                            <tr>
-                              <td align="center"><small><nobr><b><!--$TXT_BTN_BLOCK_CONFIG--></b></nobr></small></td>
-                            </tr>
-                            <tr>
-                              <td align="center" valign="top">
-                                <a style="width:150px;" id="btncfgexport" data-icon="arrow-d" data-role="button" data-mini="true" target="_self" href="./index.cgi?do=config_export"><!--$TXT_BTN_CONFIG_EXPORT--></a>
-                                <a style="width:150px;" id="btncfgimport" data-icon="arrow-u" data-role="button" data-mini="true" onclick="$('#cfgimportfile').click(); return false;"><!--$TXT_BTN_CONFIG_IMPORT--></a>
-                                <input type="file" id="cfgimportfile" accept=".cfg,.txt" data-role="none" style="display:none;" onchange="ConfigImport(this);">
-                              </td>
-                            </tr>
-                          </table>
-                       </td>
-                        <td width="200px" style="height:1px;">
-                          <table align="center" style="width:100%; min-width:200px; height:100%; background: rgba(128,128,255, 0.2); border-radius: 5px; border: 1px solid #7e7e7e;">
-                            <tr>
-                              <td align="center"><small><nobr><b><!--$TXT_BTN_BLOCK_LOG--></b></nobr></small></td>
-                            </tr>
-                            <tr>
-                              <td align="center">
+                            <div class="mqtt-field mqtt-field-host mqtt-remote-fields">
+                              <label class="mqtt-label" for="MQTT_HOST"><!--$TXT_LABEL_MQTT_HOST--></label>
+                              <input spellcheck="false" type="text" name="MQTT_HOST" id="MQTT_HOST" value="<!--$MQTT_HOST_HTML-->" placeholder="loxberry">
+                            </div>
+
+                            <div class="mqtt-field mqtt-field-port mqtt-remote-fields">
+                              <label class="mqtt-label" for="MQTT_PORT"><!--$TXT_LABEL_MQTT_PORT--></label>
+                              <input spellcheck="false" type="text" inputmode="numeric" name="MQTT_PORT" id="MQTT_PORT" value="<!--$MQTT_PORT_HTML-->" placeholder="1883">
+                            </div>
+
+                            <div class="mqtt-field mqtt-field-username mqtt-remote-fields">
+                              <label class="mqtt-label" for="MQTT_USERNAME"><!--$TXT_LABEL_MQTT_USERNAME--></label>
+                              <input spellcheck="false" type="text" name="MQTT_USERNAME" id="MQTT_USERNAME" value="<!--$MQTT_USERNAME_HTML-->" placeholder="loxberry">
+                            </div>
+
+                            <div class="mqtt-field mqtt-field-password mqtt-remote-fields">
+                              <label class="mqtt-label" for="MQTT_PASSWORD"><!--$TXT_LABEL_MQTT_PASSWORD--></label>
+                              <div class="mqtt-password-control">
+                                <input spellcheck="false" autocomplete="new-password" type="password" name="MQTT_PASSWORD" id="MQTT_PASSWORD" value="<!--$MQTT_PASSWORD_HTML-->">
+                                <button type="button" id="MQTT_PASSWORD_TOGGLE" class="mqtt-password-toggle" data-role="none" aria-pressed="false" aria-label="<!--$TXT_MQTT_PASSWORD_SHOW-->" title="<!--$TXT_MQTT_PASSWORD_SHOW-->">
+                                  <span class="mqtt-password-eye" aria-hidden="true"></span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="mqtt-local-hint"><!--$TXT_MQTT_LOCAL_HINT--></div>
+                          <div id="mqtt-validation-message" class="mqtt-validation-message" role="status" aria-live="polite"></div>
+                          <script type="text/javascript">
+                            $('#MQTT_MODE').val('<!--$MQTT_MODE-->');
+                          </script>
+                        </div>
+
+                        <div class="t2sip-panel t2sip-panel-admin">
+                          <div class="t2sip-panel-title"><!--$TXT_BTN_BLOCK_ADMIN--></div>
+                          <div class="t2sip-admin-grid">
+                            <div class="t2sip-admin-box t2sip-admin-config">
+                              <div class="t2sip-admin-subtitle"><!--$TXT_BTN_BLOCK_CONFIG--></div>
+                              <a style="width:130px;" id="btncfgexport" data-icon="arrow-d" data-role="button" data-mini="true" target="_self" href="./index.cgi?do=config_export"><!--$TXT_BTN_CONFIG_EXPORT--></a>
+                              <a style="width:130px;" id="btncfgimport" data-icon="arrow-u" data-role="button" data-mini="true" onclick="$('#cfgimportfile').click(); return false;"><!--$TXT_BTN_CONFIG_IMPORT--></a>
+                              <input type="file" id="cfgimportfile" accept=".cfg,.txt" data-role="none" style="display:none;" onchange="ConfigImport(this);">
+                            </div>
+
+                            <div class="t2sip-admin-box t2sip-admin-log">
+                              <div class="t2sip-admin-subtitle"><!--$TXT_BTN_BLOCK_LOG--></div>
+                              <div style="text-align:center;">
                                 <select name="DEBUG_USE" data-mini="false" id="DEBUG_USE" data-track-theme="e" data-role="slider">
                                   <option value="off"><!--$TXT_LABEL_DEBUG_USE_OFF--></option>
                                   <option value="on"><!--$TXT_LABEL_DEBUG_USE_ON--></option>
                                 </select>
-                              </td>
-                            </tr>
-                            <tr>
-                              <td>
-                                <script type="text/javascript">$('#DEBUG_USE').val("<!--$DEBUG_USE-->");</script>
-                                <a style="width:150px;" id="btnshwlog" data-icon="info"    data-role="button" data-mini="true" target="log" href="/admin/system/tools/logfile.cgi?logfile=plugins/<!--$psubfolder-->/Text2SIP.log&header=html&format=template"><!--$TXT_BTN_SHOW_LOG--></a>
-                                <a style="width:150px;" id="btndwllog" data-icon="arrow-d" data-role="button" data-mini="true" target="_self" href="/plugins/<!--$psubfolder-->/?mode=download_logfile"><!--$TXT_BTN_DOWNLOAD_LOG--></a>
-                                <a style="width:150px;" id="btnemptylog" data-icon="delete"  data-role="button" data-mini="true" target="_self" onclick="ConfirmDialog2('<br/><br/><table><tr><td><img src=\'/plugins/<!--$psubfolder-->/ico_delete.png\'></td><td><!--$TXT_EMPTY_LOG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_EMPTY_LOG_DIALOG_TITLE-->');"><!--$TXT_BTN_EMPTY_LOG--></a>
-                              </td>
-                            </tr>
-                          </table>
-                       </td>
-                      </tr>
-                    </table><br/>
+                              </div>
+                              <script type="text/javascript">$('#DEBUG_USE').val("<!--$DEBUG_USE-->");</script>
+                              <a style="width:155px;" id="btnshwlog" data-icon="info" data-role="button" data-mini="true" target="log" href="/admin/system/tools/logfile.cgi?logfile=plugins/<!--$psubfolder-->/Text2SIP.log&header=html&format=template"><!--$TXT_BTN_SHOW_LOG--></a>
+                              <a style="width:155px;" id="btndwllog" data-icon="arrow-d" data-role="button" data-mini="true" target="_self" href="/plugins/<!--$psubfolder-->/?mode=download_logfile"><!--$TXT_BTN_DOWNLOAD_LOG--></a>
+                              <a style="width:155px;" id="btnemptylog" data-icon="delete" data-role="button" data-mini="true" target="_self" onclick="ConfirmDialog2('<br/><br/><table><tr><td><img src=&quot;/plugins/<!--$psubfolder-->/ico_delete.png&quot;></td><td><!--$TXT_EMPTY_LOG_DIALOG_TEXT--></td></tr></table><br/>','<!--$MY_NAME--> - <!--$TXT_EMPTY_LOG_DIALOG_TITLE-->');"><!--$TXT_BTN_EMPTY_LOG--></a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div><br/>
                       <input type="hidden" name="save_data" id="save_data" value="0">
                       <input type="hidden" name="LAST_ID"   id="LAST_ID" value="<!--$LAST_ID-->">
                       <div class="form-group">
@@ -374,6 +243,95 @@
 					  </form>
                   <script type="text/javascript">
 					var DEBUG = false;  // true = verbose console output
+
+
+					function updateMqttUi() {
+					  var pluginOn = ($('#PLUGIN_USE').val() || 'off').toLowerCase() === 'on';
+					  var t2sOn    = ($('#T2S_USE').val() || 'off').toLowerCase() === 'on';
+					  var remote   = ($('#MQTT_MODE').val() || 'local') === 'remote';
+					  var mqttOn   = pluginOn && t2sOn;
+					  var $panel   = $('.t2sip-panel-mqtt');
+
+					  // Panel selbst bleibt sichtbar; Überschrift und Inhalt nur bei beiden Schaltern = ON.
+					  $panel.toggleClass('mqtt-content-hidden', !mqttOn);
+					  if (!mqttOn) return;
+
+					  // Beim internen Broker werden keine manuellen Verbindungsdaten benötigt.
+					  $('.mqtt-remote-fields').toggleClass('mqtt-hidden', !remote);
+					  $('.mqtt-local-hint').toggleClass('mqtt-hidden', remote);
+					}
+
+					$(document).on('change', '#PLUGIN_USE, #T2S_USE, #MQTT_MODE', updateMqttUi);
+
+					var mqttValidationMessageTimer = null;
+
+					function clearMqttHostValidation() {
+					  $('#MQTT_HOST').removeAttr('aria-invalid');
+					}
+
+					function hideMqttValidationMessage() {
+					  if (mqttValidationMessageTimer !== null) {
+					    window.clearTimeout(mqttValidationMessageTimer);
+					    mqttValidationMessageTimer = null;
+					  }
+					  $('#mqtt-validation-message').hide();
+					}
+
+					function showMqttValidationMessage(message) {
+					  var $message = $('#mqtt-validation-message');
+					  if (mqttValidationMessageTimer !== null) {
+					    window.clearTimeout(mqttValidationMessageTimer);
+					  }
+					  $message.html(message).show();
+					  mqttValidationMessageTimer = window.setTimeout(function() {
+					    $message.hide();
+					    mqttValidationMessageTimer = null;
+					  }, 8000);
+					}
+
+					function markMqttHostInvalid() {
+					  var $host = $('#MQTT_HOST');
+					  $host.attr('aria-invalid', 'true');
+					  showMqttValidationMessage('<!--$TXT_MQTT_CONNECTION_INVALID-->');
+					  window.setTimeout(function() {
+					    $host.trigger('focus');
+					  }, 0);
+					}
+
+					function externalMqttValidationRequired() {
+					  var pluginOn = ($('#PLUGIN_USE').val() || 'off').toLowerCase() === 'on';
+					  var t2sOn    = ($('#T2S_USE').val() || 'off').toLowerCase() === 'on';
+					  var remote   = ($('#MQTT_MODE').val() || 'local') === 'remote';
+					  return pluginOn && t2sOn && remote;
+					}
+
+					$(document).on('input change', '#MQTT_HOST, #MQTT_PORT, #MQTT_USERNAME, #MQTT_PASSWORD, #MQTT_MODE, #PLUGIN_USE, #T2S_USE', function() {
+					  clearMqttHostValidation();
+					});
+
+					function updateMqttPasswordToggle(showPassword) {
+					  var $password = $('#MQTT_PASSWORD');
+					  var $toggle = $('#MQTT_PASSWORD_TOGGLE');
+					  if (!$password.length || !$toggle.length) return;
+
+					  $password.attr('type', showPassword ? 'text' : 'password');
+					  $toggle.toggleClass('is-visible', showPassword);
+					  $toggle.attr('aria-pressed', showPassword ? 'true' : 'false');
+
+					  var label = showPassword
+					    ? '<!--$TXT_MQTT_PASSWORD_HIDE-->'
+					    : '<!--$TXT_MQTT_PASSWORD_SHOW-->';
+					  $toggle.attr('aria-label', label).attr('title', label);
+					}
+
+					$(document).on('click', '#MQTT_PASSWORD_TOGGLE', function() {
+					  updateMqttPasswordToggle($('#MQTT_PASSWORD').attr('type') === 'password');
+					});
+
+					$(document).ready(function() {
+					  updateMqttUi();
+					  updateMqttPasswordToggle(false);
+					});
 				  
                     var at_least_one=0;
                     var firstrun=1;
@@ -471,9 +429,53 @@
 					
                     function CheckConfig(save,message,title)
 					{
+						clearMqttHostValidation();
+
+						if (!externalMqttValidationRequired()) {
+							hideMqttValidationMessage();
+							continueCheckConfig(save, message, title);
+							return false;
+						}
+
+						var host = $.trim($('#MQTT_HOST').val() || '');
+						var port = $.trim($('#MQTT_PORT').val() || '') || '1883';
+
+						if (!host) {
+							markMqttHostInvalid();
+							return false;
+						}
+
+						$.ajax({
+							type: "POST",
+							dataType: "json",
+							url: "./index.cgi?do=check_mqtt_endpoint",
+							data: {
+								MQTT_HOST: host,
+								MQTT_PORT: port,
+								MQTT_USERNAME: $('#MQTT_USERNAME').val() || '',
+								MQTT_PASSWORD: $('#MQTT_PASSWORD').val() || ''
+							},
+							cache: false,
+							timeout: 5000
+						}).done(function(data) {
+							if (data && Number(data.ok) === 1) {
+								hideMqttValidationMessage();
+								continueCheckConfig(save, message, title);
+							} else {
+								markMqttHostInvalid();
+							}
+						}).fail(function() {
+							markMqttHostInvalid();
+						});
+
+						return false;
+					};
+
+					function continueCheckConfig(save,message,title)
+					{
 						$('#save_data').val('1');
 
-						// 🔧 Unlock disabled fields so serializeArray() includes them
+						// Unlock disabled fields so serializeArray() includes them
 						$('#main_form input:disabled, #main_form select:disabled, #main_form textarea:disabled')
 							.prop('disabled', false);
 
@@ -500,6 +502,11 @@
 							  data: $('#main_form').serializeArray(),
 							  cache: false,
 							  success: function(data) {
+								if ($.trim(data) === '__MQTT_CONNECTION_INVALID__') {
+								  $('#dialog').dialog("close");
+								  markMqttHostInvalid();
+								  return;
+								}
 								$('#dialog').html('<center><br/>'+data+'<br/><br/></center>');
 							  }
 							}).fail(function() {
@@ -563,154 +570,53 @@
                     }
 					
 					/*
-					 * T2SPreCheck – Simple field show/hide messages for Text2SIP / Text2Speech
-					 * Compatible with jQuery Mobile
-					 */
-					function T2SPreCheck() {
-					  const val = ($('#T2S_USE').val() || '').toLowerCase();
-					  if (val !== 'on') return; // Nur prüfen, wenn User auf "ON" schaltet
-
-					  const t2sInstalled = ($('#T2S_INSTALLED').val() || '').toLowerCase() === 'true';
-					  const bundleExists = ($('#t2s_bundle_exists').val() || '').toLowerCase() === 'true';
-					  const isBridge     = ($('#role_bridge').val() || '').toLowerCase() === 'true';	
-					  
-					  if (DEBUG)   {
-						console.log("Bundle exists:", bundleExists);
-						console.log("T2S installed:", t2sInstalled);
-						console.log("Is in Bridge Mode:", isBridge);
-					  }
-
-					  // Bridge aktiv → nichts prüfen
-					  if (isBridge) return;
-					  
-					  // Wenn T2S installiert und keine Bridge → lokaler Master, keine Warnung
-					  if (t2sInstalled && !isBridge) {
-						  console.log("Local Master detected → no bundle check required.");
-						  return;
-					  }
-
-					  // Nur reagieren, wenn etwas fehlt
-					  if (!t2sInstalled || !bundleExists) {
-
-						// Fall ①: Kein T2S + kein Bundle → Popup INSTALL1 + 2
-						if (!t2sInstalled && !bundleExists) {
-						  const msg = `
-							<table cellpadding="10">
-							  <tr>
-								<td><img src="/plugins/text2sip/Text2SIP_fail.png"></td>
-								<td><!--$TXT_SIP_INSTALL1--><!--$TXT_SIP_INSTALL2--></td>
-							  </tr>
-							</table>`;
-						  InfoDialog('<!--$TXT_SIP_INSTALL5-->', msg);
-
-						  // Nach Schließen zurücksetzen
-						  $(document).one("dialogclose", ".ui-dialog", function() {
-							$("#T2S_USE").val("off");
-							try { $("#T2S_USE").slider("refresh"); } catch(e){}
-						  });
-						  return;
-						}
-
-						// Fall ②: T2S installiert + Bundle fehlt → Popup INSTALL4
-						if (t2sInstalled && !bundleExists) {
-						  const msg = `
-							<table cellpadding="10">
-							  <tr>
-								<td><img src="/plugins/text2sip/Text2SIP_fail.png"></td>
-								<td><!--$TXT_SIP_INSTALL4-->/opt/loxberry/config/plugins/text2sip/bridge/</td>
-							  </tr>
-							</table>`;
-						  InfoDialog('<!--$TXT_SIP_INSTALL5-->', msg);
-
-						  $(document).one("dialogclose", ".ui-dialog", function() {
-							$("#T2S_USE").val("off");
-							try { $("#T2S_USE").slider("refresh"); } catch(e){}
-						  });
-						  return;
-						}
-
-						// Fall ③: Kein T2S, aber Bundle da → keine Warnung (Bridge installierbar)
-						if (!t2sInstalled && bundleExists) {
-						  console.log("OK – T2S fehlt, aber Bundle vorhanden → Bridge kann installiert werden.");
-						  return;
-						}
-					  }
-					}
-
-					// Event anbinden
-					$(function() {
-					  $('#T2S_USE').on('slidestop change', T2SPreCheck);
-					});
-
-
-					/*
 					 * fieldControl.js – Simple field show/hide control for Text2SIP / Text2Speech
 					 * Compatible with jQuery Mobile
 					 */
 					function fieldControl() {
-					  // Werte lesen & normalisieren
 					  var pluginUse    = ($('#PLUGIN_USE').val() || '').toLowerCase();
 					  var t2sUse       = ($('#T2S_USE').val() || '').toLowerCase();
+					  var mqttMode     = ($('#MQTT_MODE').val() || 'local').toLowerCase();
 					  var t2sInstalled = ($('#T2S_INSTALLED').val() || '').toLowerCase();
+
 					  if (t2sInstalled === '1') t2sInstalled = 'true';
 					  if (t2sInstalled === '0') t2sInstalled = 'false';
-					  
-					  if (DEBUG)   {
-						console.log("=== T2S DEBUG START ===");
-						console.log("PLUGIN_USE       =", $('#PLUGIN_USE').val());
-						console.log("T2S_USE          =", $('#T2S_USE').val());
-						console.log("T2S_INSTALLED    =", $('#T2S_INSTALLED').val());
-						console.log("t2s_bundle_exists=", $('#t2s_bundle_exists').val());
-						console.log("role_bridge      =", $('#role_bridge').val());
-						console.log("=== T2S DEBUG END ===");
+
+					  updateMqttUi();
+
+					  if (DEBUG) {
+						console.log("PLUGIN_USE    =", pluginUse);
+						console.log("T2S_USE       =", t2sUse);
+						console.log("MQTT_MODE     =", mqttMode);
+						console.log("T2S_INSTALLED =", t2sInstalled);
 					  }
 
-					  // Plugin OFF → gesamten T2S-Block verbergen
 					  if (pluginUse !== 'on') {
 						$('.t2s_block').hide();
+						hideMqttValidationMessage();
+						lockLangPickerAll(false);
 						return;
 					  }
 
-					  // Plugin ON → gesamten T2S-Block zeigen
 					  $('.t2s_block').show();
 
-					  // === T2S-Logik ===
-					  if (t2sUse === 'on') {
-						if (t2sInstalled === 'true') {
-						  // → Lokaler Modus (normal installiert)
-						  $('.field_t2s_not_installed').hide();
-						  $('.t2s-mode-info').show();
+					  // Local Text2Speech is required only when the internal broker is used.
+					  // The warning is shown in the common MQTT message area.
+					  var showLocalT2sHint = (
+						t2sUse === 'on' &&
+						mqttMode !== 'remote' &&
+						t2sInstalled !== 'true'
+					  );
 
-						  // Nur lokalen Hinweistext anzeigen
-						  const localTxt = "<!--$TXT_FIELD_HANDSHAKE_LOC-->";
-						  $(".t2s-mode-detail")
-							.empty()
-							.html(`<p style="margin:0;">${localTxt}</p>`)
-							.show();
-						  $(".t2s-mode-detail-row").show();
-
-						} else {
-						  // → Bridge-Modus
-						  $('.field_t2s_not_installed').show();
-						  $('.t2s-mode-info').show();
-
-						  // alten Inhalt leeren und Health abrufen
-						  $(".t2s-mode-detail").empty().show();
-						  loadT2SHealth();
-						}
-
-					  } else {
-						// → T2S deaktiviert
-						$('.field_t2s_not_installed').hide();
-						$('.t2s-mode-info').hide();
-						$('.t2s-mode-detail').hide();
+					  if (showLocalT2sHint) {
+						showMqttValidationMessage('<!--$TXT_T2S_NOT_INSTALLED-->');
+					  } else if (mqttMode !== 'remote') {
+						hideMqttValidationMessage();
 					  }
 
-					  // ==========================================
-					  // Sprachfelder (P2W_langX) sperren / freigeben
-					  // ==========================================
-					  lockLangPickerAll(t2sUse === "on");
+					  lockLangPickerAll(t2sUse === 'on');
 					}
+
 
 					/* ============================================================
 					 * P2W_lang Felder sperren/freigeben – kompatibel mit jQM & countrySelect
@@ -782,90 +688,6 @@
 
 
 					/* ============================================================
-					 * AJAX: Bridge Health Status
-					 * ============================================================ */
-					function loadT2SHealth() {
-
-					  $.ajax({
-						url: "index.cgi",
-						data: { do: "get_t2s_status" },
-						dataType: "json",
-						timeout: 3000,
-
-						success: function (data) {
-						  console.log("Health data:", data);
-
-						  var html = "";
-						  var txtTop = "";
-						  var txtBottom = "";
-
-						  // Robust: beide Keys akzeptieren
-						  var last = data.last || data.last_handshake || null;
-						  var ageSec = parseInt(data.age || 0);
-						  var ageHrs = Math.floor(ageSec / 3600);
-
-						  // -----------------------------------------------------
-						  // 1) Bridge aktiv, aber noch kein Handshake erfolgt
-						  // -----------------------------------------------------
-						  if (data.mode === "bridge" && data.first_run) {
-							html = "<p><!--$TXT_FIELD_BRIDGE_WAIT--></p>";
-
-						  // -----------------------------------------------------
-						  // 2) Bridge aktiv + Handshake vorhanden
-						  // -----------------------------------------------------
-						  } else if (data.mode === "bridge" && last) {
-
-							var ageText = last;
-
-							if (ageHrs < 12) {
-							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT3-->";
-							} else if (ageHrs < 24) {
-							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT2-->";
-							} else {
-							  txtTop = "<!--$TXT_FIELD_HANDSHAKE_EXT1-->";
-							}
-
-							txtBottom = "<!--$TXT_FIELD_HANDSHAKE_EXT--> " + ageText;
-
-							html = `
-							  <p style="margin:0;">
-								${txtTop}<br>
-								<span style="font-weight:normal;">${txtBottom}</span>
-							  </p>
-							`;
-
-						  // -----------------------------------------------------
-						  // 3) Bridge aktiv, aber KEINE Healthdaten (Fehlerfall)
-						  // -----------------------------------------------------
-						  } else if (data.mode === "bridge") {
-							html = "<p><!--$TXT_FIELD_BRIDGE--></p>";
-
-						  // -----------------------------------------------------
-						  // 4) Local Mode (Nichts anzeigen)
-						  // -----------------------------------------------------
-						  } else {
-							html = "<p></p>";
-						  }
-
-						  $(".t2s-mode-detail").html(html).show();
-						  $(".t2s-mode-detail-row").show();
-						},
-
-						error: function (xhr, status, err) {
-						  console.warn("Failed to load T2S health:", status, err);
-
-						  $(".t2s-mode-detail")
-							.html("<p><!--$TXT_FIELD_BRIDGE_STATUS--></p>")
-							.show();
-
-						  $(".t2s-mode-detail-row").show();
-						}
-					  });
-
-					}
-
-
-					/* ============================================================
 					 * Initialisierung / Event-Bindings
 					 * ============================================================ */
 					$(document).on('pagecreate pageshow', function() {
@@ -877,5 +699,5 @@
 					  setTimeout(fieldControl, 200);
 					});
 
-					$(document).on('change', '#PLUGIN_USE, #T2S_USE', fieldControl);
+					$(document).on('change', '#PLUGIN_USE, #T2S_USE, #MQTT_MODE', fieldControl);
 					  </script>

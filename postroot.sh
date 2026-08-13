@@ -2,100 +2,308 @@
 
 logfile="REPLACELBPLOGDIR/Text2SIP.log"
 
-# --- Hilfsfunktion: auf apt/dpkg-Locks warten (max ~2 Min) ---
 wait_for_dpkg() {
-  local LOG="$1"; shift || true
-  local tries=${1:-60}   # 60 * 2s = 120s
-  echo "$(date '+%F %T') Waiting for dpkg/apt locks ..." >> "$LOG"
-  while \
-    fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
-    fuser /var/lib/apt/lists/lock   >/dev/null 2>&1 || \
-    fuser /var/cache/apt/archives/lock >/dev/null 2>&1 || \
-    pgrep -x apt >/dev/null || pgrep -x apt-get >/dev/null || pgrep -x dpkg >/dev/null
-  do
-    sleep 2
-    tries=$((tries-1))
-    if [ "$tries" -le 0 ]; then
-      echo "$(date '+%F %T') dpkg lock wait timed out, continue anyway" >> "$LOG"
-      break
-    fi
-  done
-  echo "$(date '+%F %T') dpkg/apt locks are free" >> "$LOG"
+    local log="$1"
+    local tries="${2:-60}"   # 60 * 2s = 120s
+
+    echo "$(date '+%F %T') Waiting for dpkg/apt locks ..." >> "$log"
+    while \
+        fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+        fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+        fuser /var/cache/apt/archives/lock >/dev/null 2>&1 || \
+        pgrep -x apt >/dev/null 2>&1 || \
+        pgrep -x apt-get >/dev/null 2>&1 || \
+        pgrep -x dpkg >/dev/null 2>&1
+    do
+        sleep 2
+        tries=$((tries - 1))
+        if [ "$tries" -le 0 ]; then
+            echo "$(date '+%F %T') dpkg lock wait timed out; continuing" >> "$log"
+            break
+        fi
+    done
 }
 
-# --- Logfile vorbereiten ---
-date                                  >> "$logfile" 2>&1
-echo "### Postroot: deps & locale" >> "$logfile" 2>&1
+# -----------------------------------------------------------------------------
+# Logfile
+# -----------------------------------------------------------------------------
+mkdir -p "$(dirname "$logfile")" 2>/dev/null || true
 touch "$logfile"
-chown loxberry:loxberry "$logfile"    >> "$logfile" 2>&1 || true
-chmod 660 "$logfile"                  >> "$logfile" 2>&1 || true
+chown loxberry:loxberry "$logfile" 2>/dev/null || true
+chmod 660 "$logfile" 2>/dev/null || true
 
-# --- Pico/Locales: handled entirely in postroot (daemon does nothing) ---
+echo "$(date '+%F %T') <INFO> Text2SIP postroot started" >> "$logfile"
+
+# -----------------------------------------------------------------------------
+# Runtime dependencies / Pico fallback
+# -----------------------------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
+ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
+[ -n "$ARCH" ] || ARCH="$(uname -m)"
 
-# Optionale Pfade zu euren Bullseye-Bundle-DEBs (nur genutzt auf Bullseye)
-PICO_DEB_DIR="REPLACELBHOMEDIR/data/plugins/text2sip/debs"
-PICO_DATA_DEB="$PICO_DEB_DIR/libttspico-data_1.0+git20130326-11_all.deb"
-PICO_LIB_DEB="$PICO_DEB_DIR/libttspico0_1.0+git20130326-11_amd64.deb"
-PICO_UTIL_DEB="$PICO_DEB_DIR/libttspico-utils_1.0+git20130326-11_amd64.deb"
+if [ -r /etc/os-release ]; then
+    . /etc/os-release
+    echo "<INFO> Detected ${PRETTY_NAME:-Linux}; architecture=$ARCH" >> "$logfile"
+else
+    echo "<INFO> Detected architecture=$ARCH" >> "$logfile"
+fi
 
-# OS erkennen
-. /etc/os-release
-echo "<INFO> postroot: detected ${PRETTY_NAME} (${VERSION_CODENAME})" >> "$logfile" 2>&1
-
-# APT vorbereiten
 wait_for_dpkg "$logfile" 60
-apt-get update -y                                  >> "$logfile" 2>&1 || true
+apt-get update -y >> "$logfile" 2>&1 || true
 wait_for_dpkg "$logfile" 60
 apt-get install -y --no-install-recommends \
-  ffmpeg locales libttspico-utils libttspico-data libttspico0 \
-                                                   >> "$logfile" 2>&1 || true
+    ffmpeg locales sox wget libttspico-utils libttspico-data libttspico0 \
+    >> "$logfile" 2>&1 || true
 
-# Bookworm: sicherstellen, dass die Repo-Versionen (-13) aktiv sind (keine lokalen Downgrades!)
-if [ "${VERSION_CODENAME}" = "bookworm" ]; then
-  echo "<DEB> postroot: bookworm → enforce pico -13 from repo (no downgrade)" >> "$logfile" 2>&1
-  wait_for_dpkg "$logfile" 60
-  apt-get install -y --reinstall \
-    libttspico-utils libttspico-data libttspico0   >> "$logfile" 2>&1 || true
-else
-  # Bullseye: falls gewünscht, gebündelte -11-DEBs installieren
-  if [ -r "$PICO_DATA_DEB" ] && [ -r "$PICO_LIB_DEB" ] && [ -r "$PICO_UTIL_DEB" ]; then
-    echo "<DEB> postroot: bullseye → install bundled pico -11 debs" >> "$logfile" 2>&1
-    wait_for_dpkg "$logfile" 60
-    dpkg -i "$PICO_DATA_DEB" "$PICO_LIB_DEB" "$PICO_UTIL_DEB"  >> "$logfile" 2>&1 || true
-  else
-    echo "<DEB> postroot: bullseye → bundled debs not found, keeping repo versions" >> "$logfile" 2>&1
-  fi
+# Some Debian releases/architectures do not provide Pico in the active repo.
+# If pico2wave is still missing, use the architecture-specific DEBs shipped
+# below data/<arch>/ (when present in the full release archive).
+if ! command -v pico2wave >/dev/null 2>&1; then
+    PICO_DEB_DIR="REPLACELBHOMEDIR/data/plugins/text2sip/$ARCH"
+    PICO_DATA_DEB="$(find "$PICO_DEB_DIR" -maxdepth 1 -type f -name 'libttspico-data_*_all.deb' -print -quit 2>/dev/null)"
+    PICO_LIB_DEB="$(find "$PICO_DEB_DIR" -maxdepth 1 -type f -name "libttspico0_*_${ARCH}.deb" -print -quit 2>/dev/null)"
+    PICO_UTIL_DEB="$(find "$PICO_DEB_DIR" -maxdepth 1 -type f -name "libttspico-utils_*_${ARCH}.deb" -print -quit 2>/dev/null)"
+
+    if [ -n "$PICO_DATA_DEB" ] && [ -n "$PICO_LIB_DEB" ] && [ -n "$PICO_UTIL_DEB" ]; then
+        echo "<INFO> Installing bundled Pico packages from $PICO_DEB_DIR" >> "$logfile"
+        wait_for_dpkg "$logfile" 60
+        dpkg -i "$PICO_DATA_DEB" "$PICO_LIB_DEB" "$PICO_UTIL_DEB" >> "$logfile" 2>&1 || true
+        wait_for_dpkg "$logfile" 60
+        apt-get -f install -y >> "$logfile" 2>&1 || true
+    else
+        echo "<WARNING> No complete bundled Pico package set found in $PICO_DEB_DIR" >> "$logfile"
+    fi
 fi
 
-# Marker: Postroot hat Pico erledigt (nur zu Debugzwecken)
-mkdir -p /var/lib/text2sip 2>/dev/null
-echo "<DEB> pico-done:${VERSION_CODENAME}" > /var/lib/text2sip/pico-state
-echo "<DEB> postroot: pico finalized (${VERSION_CODENAME})" >> "$logfile" 2>&1
-
-# (Optional) Kurzprüfung ins Log
-dpkg -l | awk '/libttspico/{print "postroot: " $1,$2,$3}' >> "$logfile" 2>&1 || true
-
-echo "<INFO>  Postroot: deps & locale done" >> "$logfile" 2>&1
-
-# --- Copy uninstall helper ---
-cp -p -v $5/webfrontend/htmlauth/plugins/$3/bin/uninstall_sip_client_bridge.pl /etc/mosquitto/sip-uninstall.pl
-echo "<OK> sip-uninstall.pl has been copied to /etc/mosquitto"
-
-# --- Dein bisheriger Teil: Daemon starten ---
-echo "<INFO> Start Text2SIP installation, for further infos see Plugin logfile" >> "$logfile" 2>&1
-bash $5/system/daemons/plugins/Text2SIP >> "$logfile" 2>&1 &
-
-# ===== Report MQTT Gateway state =====
-# LoxBerry 4 runs the gateway as mqtt_gateway.py, earlier versions as
-# mqttgateway.pl. Only report what is there - see the comment below.
-echo "<INFO> Checking MQTT Gateway runtime state …"
-if pgrep -f "sbin/mqtt_gateway\.py|sbin/mqttgateway\.pl" >/dev/null 2>&1; then
-    echo "<OK> MQTT Gateway is active"
+if command -v pico2wave >/dev/null 2>&1; then
+    echo "<OK> pico2wave available: $(command -v pico2wave)" >> "$logfile"
 else
-    echo "<INFO> MQTT Gateway is not running."
-    echo "<INFO> It is only used by the Text2Speech bridge, which is off by default."
-    echo "<INFO> LoxBerry does not start it while no Miniserver is configured."
+    echo "<WARNING> pico2wave is unavailable; Pico fallback cannot be used" >> "$logfile"
 fi
 
+if command -v ffmpeg >/dev/null 2>&1; then
+    echo "<OK> ffmpeg available: $(command -v ffmpeg)" >> "$logfile"
+else
+    echo "<WARNING> ffmpeg is unavailable" >> "$logfile"
+fi
+
+if command -v sox >/dev/null 2>&1; then
+    echo "<OK> sox available: $(command -v sox)" >> "$logfile"
+else
+    echo "<WARNING> sox is unavailable; pjsua duration detection will use its fallback" >> "$logfile"
+fi
+
+# -----------------------------------------------------------------------------
+# Architecture-specific PJSUA binaries
+# -----------------------------------------------------------------------------
+PJSUA_BASE="REPLACELBHOMEDIR/data/plugins/text2sip"
+for PJSUA_ARCH in amd64 arm64 armhf; do
+    PJSUA_BIN="$PJSUA_BASE/$PJSUA_ARCH/pjsua-$PJSUA_ARCH"
+    if [ -f "$PJSUA_BIN" ]; then
+        chown loxberry:loxberry "$PJSUA_BIN" >> "$logfile" 2>&1 || true
+        chmod 755 "$PJSUA_BIN" >> "$logfile" 2>&1 || true
+        echo "<OK> PJSUA binary prepared: $PJSUA_BIN" >> "$logfile"
+    else
+        echo "<WARNING> PJSUA binary not found: $PJSUA_BIN" >> "$logfile"
+    fi
+done
+
+# -----------------------------------------------------------------------------
+# One-time cleanup of legacy Text2SIP Mosquitto bridge artifacts.
+# The current plugin talks directly to either the internal or external broker.
+# -----------------------------------------------------------------------------
+legacy_mosquitto_changed=0
+legacy_bridge_detected=0
+legacy_bridge_host=""
+legacy_bridge_conf="/etc/mosquitto/conf.d/30-bridge-t2s.conf"
+
+# Older bridge versions could add the bridge target hostname to /etc/hosts.
+# Capture that hostname BEFORE 30-bridge-t2s.conf is removed.
+if [ -r "$legacy_bridge_conf" ]; then
+    legacy_bridge_detected=1
+    legacy_bridge_host="$(awk '
+        $1 == "address" {
+            host = $2
+            sub(/:[0-9]+$/, "", host)
+            print host
+            exit
+        }
+    ' "$legacy_bridge_conf" 2>/dev/null)"
+fi
+
+# If the bridge config is already gone, try to recover the former host from an
+# old Text2SIP certificate bundle. Search both the live config and the temporary
+# pre-upgrade backup so this works independently of upgrade-script ordering.
+find_legacy_bridge_host_from_bundle() {
+    local bridge_dir bundle member info host
+    for bridge_dir in \
+        "REPLACELBPCONFIGDIR/bridge" \
+        "/tmp/REPLACELBPPLUGINDIR/bridge"
+    do
+        [ -d "$bridge_dir" ] || continue
+        for bundle in "$bridge_dir"/t2s_bundle*.tar.gz; do
+            [ -r "$bundle" ] || continue
+            member="$(tar -tzf "$bundle" 2>/dev/null | awk '/(^|\/)master\.info$/ { print; exit }')"
+            [ -n "$member" ] || continue
+            info="$(tar -xOf "$bundle" "$member" 2>/dev/null || true)"
+            [ -n "$info" ] || continue
+
+            # master.info historically existed as KEY=VALUE or JSON.
+            host="$(printf '%s\n' "$info" | sed -nE \
+                's/^[[:space:]]*(HOST|MASTER_HOST)[[:space:]]*[:=][[:space:]]*([^[:space:]"]+).*/\2/p' | head -n 1)"
+            if [ -z "$host" ]; then
+                host="$(printf '%s' "$info" | tr '\n' ' ' | sed -nE \
+                    's/.*"(HOST|MASTER_HOST)"[[:space:]]*:[[:space:]]*"([^"]+)".*/\2/p')"
+            fi
+            if [ -n "$host" ]; then
+                printf '%s\n' "$host"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+
+if [ -z "$legacy_bridge_host" ]; then
+    legacy_bridge_host="$(find_legacy_bridge_host_from_bundle || true)"
+fi
+
+# Remember whether any old bridge installation is present before deleting it.
+for legacy_probe in \
+    /etc/mosquitto/conf.d/30-bridge-t2s.conf \
+    /etc/mosquitto/role/sip-bridge \
+    /etc/mosquitto/sip-uninstall.pl \
+    /etc/mosquitto/certs/sip-bridge \
+    /etc/mosquitto/conf.d/mosq_mqttgateway.conf.disabled \
+    /etc/mosquitto/conf.d/mosq_passwd.disabled \
+    /etc/mosquitto/conf.d/disabled/mosq_mqttgateway.conf \
+    /etc/mosquitto/conf.d/disabled/mosq_passwd
+do
+    if [ -e "$legacy_probe" ]; then
+        legacy_bridge_detected=1
+        break
+    fi
+done
+
+for legacy_file in \
+    /etc/mosquitto/conf.d/30-bridge-t2s.conf \
+    /etc/mosquitto/role/sip-bridge \
+    /etc/mosquitto/sip-uninstall.pl
+do
+    if [ -e "$legacy_file" ]; then
+        rm -f "$legacy_file" && legacy_mosquitto_changed=1
+        echo "<INFO> Removed legacy Text2SIP bridge artifact: $legacy_file" >> "$logfile"
+    fi
+done
+
+if [ -d /etc/mosquitto/certs/sip-bridge ]; then
+    rm -rf /etc/mosquitto/certs/sip-bridge
+    legacy_mosquitto_changed=1
+    echo "<INFO> Removed legacy Text2SIP bridge certificate directory" >> "$logfile"
+fi
+
+# Restore Mosquitto files which older Text2SIP bridge versions disabled.
+# Never remove /etc/mosquitto/ca or the shared mosq-ca.crt here.
+restore_mosquitto_file() {
+    src="$1"
+    dst="$2"
+    if [ -e "$src" ]; then
+        if [ ! -e "$dst" ]; then
+            mv -f "$src" "$dst"
+            echo "<INFO> Restored Mosquitto config: $dst" >> "$logfile"
+        else
+            rm -f "$src"
+            echo "<INFO> Removed obsolete disabled duplicate: $src" >> "$logfile"
+        fi
+        legacy_mosquitto_changed=1
+    fi
+}
+
+restore_mosquitto_file /etc/mosquitto/conf.d/mosq_mqttgateway.conf.disabled /etc/mosquitto/conf.d/mosq_mqttgateway.conf
+restore_mosquitto_file /etc/mosquitto/conf.d/mosq_passwd.disabled /etc/mosquitto/conf.d/mosq_passwd
+restore_mosquitto_file /etc/mosquitto/conf.d/disabled/mosq_mqttgateway.conf /etc/mosquitto/conf.d/mosq_mqttgateway.conf
+restore_mosquitto_file /etc/mosquitto/conf.d/disabled/mosq_passwd /etc/mosquitto/conf.d/mosq_passwd
+rmdir /etc/mosquitto/conf.d/disabled 2>/dev/null || true
+
+# Remove only the hostname previously used by the Text2SIP bridge from
+# /etc/hosts. Do not touch unrelated host entries. Historical bridge installs
+# used t2s.local as their default when no explicit HOST/MASTER_HOST was set.
+remove_legacy_hosts_entry() {
+    local host="$1"
+    local hosts_file="/etc/hosts"
+    local tmp_file
+
+    [ -n "$host" ] || return 0
+    [ -f "$hosts_file" ] || return 0
+
+    # The old installer did not create /etc/hosts entries when the bridge host
+    # itself was an IPv4 address.
+    if printf '%s' "$host" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+        return 0
+    fi
+
+    # Accept only a normal hostname token before using it as a lookup value.
+    if ! printf '%s' "$host" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+        echo "<WARNING> Refusing unsafe legacy bridge hostname for /etc/hosts cleanup: $host" >> "$logfile"
+        return 0
+    fi
+
+    if ! awk -v host="$host" '
+        /^[[:space:]]*#/ { next }
+        {
+            for (i = 2; i <= NF; i++) {
+                if ($i == host) { found = 1; exit }
+            }
+        }
+        END { exit(found ? 0 : 1) }
+    ' "$hosts_file"; then
+        return 0
+    fi
+
+    tmp_file="$(mktemp /tmp/text2sip-hosts.XXXXXX)" || {
+        echo "<WARNING> Could not create temporary file for /etc/hosts cleanup" >> "$logfile"
+        return 0
+    }
+
+    if awk -v host="$host" '
+        /^[[:space:]]*#/ { print; next }
+        {
+            remove = 0
+            for (i = 2; i <= NF; i++) {
+                if ($i == host) { remove = 1; break }
+            }
+            if (!remove) print
+        }
+    ' "$hosts_file" > "$tmp_file" && cat "$tmp_file" > "$hosts_file"; then
+        echo "<INFO> Removed legacy Text2SIP bridge host from /etc/hosts: $host" >> "$logfile"
+    else
+        echo "<WARNING> Could not remove legacy Text2SIP bridge host from /etc/hosts: $host" >> "$logfile"
+    fi
+    rm -f "$tmp_file"
+}
+
+if [ -n "$legacy_bridge_host" ]; then
+    remove_legacy_hosts_entry "$legacy_bridge_host"
+elif [ "$legacy_bridge_detected" -eq 1 ]; then
+    # Safe fallback for bridge remnants where 30-bridge-t2s.conf/bundle has
+    # already disappeared: t2s.local was the historical default bridge host.
+    remove_legacy_hosts_entry "t2s.local"
+fi
+
+if [ "$legacy_mosquitto_changed" -eq 1 ]; then
+    systemctl restart mosquitto >> "$logfile" 2>&1 || true
+fi
+
+# -----------------------------------------------------------------------------
+# Idempotent Text2SIP runtime setup via installed daemon script
+# -----------------------------------------------------------------------------
+daemon_script="REPLACELBHOMEDIR/system/daemons/plugins/Text2SIP"
+if [ -f "$daemon_script" ]; then
+    echo "<INFO> Running Text2SIP runtime setup" >> "$logfile"
+    /bin/bash "$daemon_script" >> "$logfile" 2>&1 || true
+else
+    echo "<WARNING> Text2SIP daemon script not found: $daemon_script" >> "$logfile"
+fi
+
+echo "$(date '+%F %T') <OK> Text2SIP postroot completed" >> "$logfile"
 exit 0

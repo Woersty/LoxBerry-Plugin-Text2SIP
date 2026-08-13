@@ -86,3 +86,493 @@
     -webkit-transform: scaleY(1.0);
   }
 }
+
+/* =============================================================================
+ * Text2SIP - header / plugin / MQTT / administration layout
+ * V11: MQTT contents follow Plugin active; remote fields hidden for internal broker.
+ * ============================================================================= */
+.t2s-topbar {
+  min-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.t2sip-hero {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  padding: 8px 12px 10px;
+  margin-bottom: 8px;
+  background: rgba(255,255,192,0.2);
+  border-radius: 5px;
+  border: 1px solid #7e7e7e;
+}
+
+/* Header actions: no table/background strip, centered as one compact group. */
+#main_form .t2sip-hero-actions {
+  display: flex !important;
+  flex-flow: row nowrap !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 4px !important;
+  width: auto !important;
+  margin: 4px auto 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+#main_form .t2sip-hero-actions #btncancel,
+#main_form .t2sip-hero-actions #btnsavecfg {
+  width: 180px !important;
+  margin: 0 !important;
+}
+
+/* Three top-level areas must stay side-by-side on the normal desktop view. */
+#main_form .t2sip-settings-row {
+  display: flex !important;
+  flex-flow: row nowrap !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#main_form .t2sip-panel {
+  display: block !important;
+  box-sizing: border-box !important;
+  min-height: 172px;
+  padding: 7px 8px;
+  background: rgba(128,128,255,0.2) !important;
+  border-radius: 5px;
+  border: 1px solid #7e7e7e;
+}
+
+#main_form .t2sip-panel-plugin {
+  flex: 0 0 225px !important;
+  width: 225px !important;
+}
+
+#main_form .t2sip-panel-mqtt {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 560px !important;
+}
+
+#main_form .t2sip-panel-admin {
+  flex: 0 0 470px !important;
+  width: 470px !important;
+}
+
+.t2sip-panel-title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 0.9em;
+  margin: 0 0 7px;
+  white-space: nowrap;
+}
+
+/*
+ * Inner layout surfaces must not paint white rectangles over the panel color.
+ * Inputs/selects/buttons intentionally keep their normal theme backgrounds.
+ */
+#main_form .t2sip-panel-plugin .plugin-config-box,
+#main_form .t2sip-panel-plugin .plugin-config-row,
+#main_form .t2sip-panel-plugin .plugin-config-label,
+#main_form .t2sip-panel-plugin .plugin-config-control,
+#main_form .t2sip-panel-plugin .t2s_block,
+#main_form .t2sip-panel-plugin .field_t2s_not_installed,
+#main_form .t2sip-panel-mqtt .mqtt-config-grid,
+#main_form .t2sip-panel-mqtt .mqtt-field,
+#main_form .t2sip-panel-admin .t2sip-admin-grid,
+#main_form .t2sip-panel-admin .t2sip-admin-box {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* Plugin switches: div layout avoids theme table backgrounds completely. */
+#main_form .plugin-config-box {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#main_form .plugin-config-row {
+  display: grid !important;
+  grid-template-columns: 122px minmax(0, 1fr) !important;
+  align-items: center !important;
+  min-height: 42px;
+  column-gap: 4px;
+}
+
+#main_form .plugin-config-label {
+  font-weight: normal;
+  font-size: 0.9em;
+  white-space: nowrap;
+  line-height: 1.3em;
+  color: inherit;
+}
+
+#main_form .plugin-config-control {
+  min-width: 0;
+}
+
+#main_form .plugin-config-control .ui-flipswitch,
+#main_form .plugin-config-control .ui-slider,
+#main_form .plugin-config-control select[data-role="slider"] {
+  max-width: 100px;
+  margin-left: 0 !important;
+}
+
+#main_form .t2s-spacer,
+#main_form .t2s_spacer {
+  height: 8px;
+}
+
+#main_form .field_t2s_not_installed {
+  display: none;
+  color: #a00;
+  font-style: italic;
+  font-size: 0.9em;
+  line-height: 1.35em;
+}
+
+/*
+ * MQTT layout:
+ * row 1: Broker | Host | Port
+ * row 2: Username | Password
+ */
+#main_form .mqtt-config-grid {
+  display: grid !important;
+  grid-template-columns: minmax(245px, 0.95fr) minmax(300px, 1.05fr) minmax(125px, 0.45fr) !important;
+  grid-template-areas:
+    "mode host port"
+    "username password ." !important;
+  gap: 10px 14px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 1px 3px 0 !important;
+}
+
+#main_form .mqtt-field {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: center !important;
+  column-gap: 8px !important;
+  min-width: 0 !important;
+}
+
+/* Pairwise alignment: Broker/Username and Host/Password start on the same vertical line. */
+#main_form .mqtt-field-mode,
+#main_form .mqtt-field-username {
+  grid-template-columns: 102px minmax(0, 1fr) !important;
+}
+
+#main_form .mqtt-field-host,
+#main_form .mqtt-field-password {
+  grid-template-columns: 64px 205px !important;
+  justify-content: start !important;
+  padding-left: 14px !important;
+  box-sizing: border-box !important;
+}
+
+/* Keep Broker and Host labels visually anchored to the left edge of their label columns. */
+#main_form .mqtt-field-mode > .mqtt-label,
+#main_form .mqtt-field-host > .mqtt-label {
+  text-align: left !important;
+  justify-self: start !important;
+}
+
+/* User-confirmed alignment: move only the Username label slightly left. */
+#main_form .mqtt-field-username > .mqtt-label {
+  margin-left: -7px !important;
+}
+
+#main_form .mqtt-field-mode     { grid-area: mode; }
+#main_form .mqtt-field-host     { grid-area: host; }
+#main_form .mqtt-field-port     { grid-area: port; }
+#main_form .mqtt-field-username { grid-area: username; }
+#main_form .mqtt-field-password { grid-area: password; }
+
+/* MQTT typography matches the Plugin block exactly. */
+#main_form .t2sip-panel-mqtt,
+#main_form .t2sip-panel-mqtt .mqtt-config-grid,
+#main_form .t2sip-panel-mqtt .mqtt-field,
+#main_form .t2sip-panel-mqtt .mqtt-label,
+#main_form .t2sip-panel-mqtt input,
+#main_form .t2sip-panel-mqtt select,
+#main_form .t2sip-panel-mqtt button {
+  font-family: inherit !important;
+}
+
+#main_form .mqtt-label {
+  font-family: inherit !important;
+  font-weight: normal;
+  font-size: 0.9em;
+  white-space: nowrap;
+  line-height: 1.3em;
+  color: inherit;
+}
+
+/* Broker selector: native select styled like the MQTT inputs, with visible dropdown triangle. */
+#main_form .mqtt-field-mode {
+  position: relative !important;
+}
+
+#main_form #MQTT_MODE {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 36px !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 34px 0 12px !important;
+
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-weight: normal !important;
+  line-height: 34px !important;
+  color: inherit !important;
+
+  background-color: #fff !important;
+  background-image: none !important;
+
+  border: 1px solid #b6b6b6 !important;
+  border-radius: .6em !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+
+  cursor: pointer !important;
+}
+
+#main_form #MQTT_MODE:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+#main_form .mqtt-field-mode::after {
+  content: "";
+  position: absolute !important;
+  right: 12px !important;
+  top: 50% !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-left: 5px solid transparent !important;
+  border-right: 5px solid transparent !important;
+  border-top: 7px solid currentColor !important;
+  transform: translateY(-35%) !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+
+#main_form .mqtt-field .ui-input-text,
+#main_form .mqtt-field input {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+}
+
+/* MQTT HTML placeholders: light gray, even with jQM/WebKit theme overrides. */
+#main_form input#MQTT_HOST::placeholder,
+#main_form input#MQTT_PORT::placeholder,
+#main_form input#MQTT_USERNAME::placeholder {
+  color: #b8b8b8 !important;
+  -webkit-text-fill-color: #b8b8b8 !important;
+  opacity: 1 !important;
+}
+
+#main_form input#MQTT_HOST::-webkit-input-placeholder,
+#main_form input#MQTT_PORT::-webkit-input-placeholder,
+#main_form input#MQTT_USERNAME::-webkit-input-placeholder {
+  color: #b8b8b8 !important;
+  -webkit-text-fill-color: #b8b8b8 !important;
+  opacity: 1 !important;
+}
+
+#main_form input#MQTT_HOST::-moz-placeholder,
+#main_form input#MQTT_PORT::-moz-placeholder,
+#main_form input#MQTT_USERNAME::-moz-placeholder {
+  color: #b8b8b8 !important;
+  opacity: 1 !important;
+}
+
+
+/* Password field with in-field eye toggle. */
+#main_form .mqtt-password-control {
+  position: relative !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+#main_form .mqtt-password-control > .ui-input-text,
+#main_form .mqtt-password-control > input#MQTT_PASSWORD {
+  width: 100% !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+#main_form .mqtt-password-control input#MQTT_PASSWORD {
+  padding-right: 38px !important;
+}
+
+#main_form .mqtt-password-toggle {
+  position: absolute !important;
+  z-index: 3 !important;
+  top: 50% !important;
+  right: 5px !important;
+  transform: translateY(-50%) !important;
+  width: 30px !important;
+  height: 28px !important;
+  min-width: 30px !important;
+  min-height: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  cursor: pointer !important;
+}
+
+#main_form .mqtt-password-toggle:hover,
+#main_form .mqtt-password-toggle:focus {
+  background: rgba(0,0,0,0.07) !important;
+  outline: none !important;
+}
+
+#main_form .mqtt-password-eye {
+  position: relative !important;
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 auto !important;
+}
+
+#main_form .mqtt-password-eye::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 70% 20%;
+  transform: rotate(45deg);
+  box-sizing: border-box;
+}
+
+#main_form .mqtt-password-eye::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+#main_form .mqtt-password-toggle.is-visible .mqtt-password-eye {
+  opacity: 0.68;
+}
+
+.mqtt-local-hint {
+  margin: 9px 4px 0;
+  font-size: 0.82em;
+  line-height: 1.35em;
+  color: inherit;
+  opacity: 0.72;
+  text-align: left;
+}
+
+#main_form .mqtt-validation-message {
+  display: none;
+  margin: 34px 4px 0 !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  color: #d00000 !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+
+/* MQTT visibility rules. Use classes + !important so jQM/CSS grid rules cannot override hiding. */
+#main_form .t2sip-panel-mqtt.mqtt-content-hidden > .t2sip-panel-title,
+#main_form .t2sip-panel-mqtt.mqtt-content-hidden > .mqtt-config-grid,
+#main_form .t2sip-panel-mqtt.mqtt-content-hidden > .mqtt-local-hint,
+#main_form .t2sip-panel-mqtt.mqtt-content-hidden > .mqtt-validation-message {
+  display: none !important;
+}
+
+#main_form .mqtt-hidden {
+  display: none !important;
+}
+
+
+/* Administration: configuration intentionally narrower than log section. */
+#main_form .t2sip-admin-grid {
+  display: flex !important;
+  flex-flow: row nowrap !important;
+  align-items: stretch !important;
+  gap: 7px !important;
+  height: calc(100% - 24px);
+}
+
+#main_form .t2sip-admin-box {
+  box-sizing: border-box;
+  padding: 5px 5px 7px;
+  border-radius: 5px;
+  border: 1px solid rgba(126,126,126,0.75);
+}
+
+#main_form .t2sip-admin-config {
+  flex: 0 0 205px !important;
+  width: 205px !important;
+}
+
+#main_form .t2sip-admin-log {
+  flex: 1 1 auto !important;
+  min-width: 220px !important;
+}
+
+.t2sip-admin-subtitle {
+  text-align: center;
+  font-weight: bold;
+  font-size: 0.82em;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+#btnshwlog,
+#btndwllog,
+#btnemptylog,
+#btncfgexport,
+#btncfgimport {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+@media (max-width: 1200px) {
+  #main_form .t2sip-settings-row { gap: 6px !important; }
+  #main_form .t2sip-panel-plugin { flex-basis: 215px !important; width: 215px !important; }
+  #main_form .t2sip-panel-admin { flex-basis: 455px !important; width: 455px !important; }
+  #main_form .t2sip-admin-config { flex-basis: 195px !important; width: 195px !important; }
+  #main_form .mqtt-config-grid {
+    grid-template-columns: minmax(215px, 0.95fr) minmax(235px, 1.0fr) minmax(105px, 0.4fr) !important;
+    gap: 8px 10px !important;
+  }
+  #main_form .mqtt-field-host,
+  #main_form .mqtt-field-password {
+    grid-template-columns: 60px 180px !important;
+    padding-left: 10px !important;
+  }
+}

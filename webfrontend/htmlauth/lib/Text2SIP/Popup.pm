@@ -104,7 +104,7 @@ sub confirm_popup {
     my $href_ok = defined $o{href_yes}     ? $o{href_yes}     : '';  # optional
     my $href_no = defined $o{href_no}      ? $o{href_no}      : '';  # optional
     my $js_ok   = defined $o{on_yes}       ? $o{on_yes}       : '';  # optional: JS-Code (String)
-    my $js_no   = defined $o{on_no}        ? $o{on_no}        : '';  # optional
+    my $js_no_action = defined $o{on_no}    ? $o{on_no}        : '';  # optional
     my $close_on_action = exists $o{close_on_action} ? ($o{close_on_action}?1:0) : 1;
 
     # Message wie beim flash_popup behandeln
@@ -132,11 +132,11 @@ sub confirm_popup {
     my $js_msg   = encode_json($msg_html);
     my $js_title = encode_json($title);
     my $js_yes   = encode_json($yeslbl);
-    my $js_no    = encode_json($nolbl);
+    my $js_nolabel = encode_json($nolbl);
     my $js_hrefY = encode_json($href_ok);
     my $js_hrefN = encode_json($href_no);
     my $js_codeY = encode_json($js_ok);  # roher JS-Text als String
-    my $js_codeN = encode_json($js_no);
+    my $js_codeN = encode_json($js_no_action);
 
     my $js = <<"JS";
 <script>
@@ -164,7 +164,7 @@ sub confirm_popup {
       runAction($js_codeY, $js_hrefY);
       if (!$close_on_action) { /* offen lassen */ }
     };
-    btns[$js_no] = function(){
+    btns[$js_nolabel] = function(){
       if ($close_on_action) { try { \$d.dialog('close'); } catch(e){} }
       runAction($js_codeN, $js_hrefN);
     };

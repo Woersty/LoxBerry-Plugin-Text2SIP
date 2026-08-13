@@ -12,3 +12,6 @@ Changelog:
 				kann auch dezentral installiert werden (z.B. auf einem zweiten Loxberry durch MQTT Bridging)
 				Logging verfeinert
 2025.12.01		Fixed SIP Call from Loxone
+2026.08.10		Die alte sipcmd wurde durch pjsua ersetzt
+				Die MQTT Bridge Funktion wurde entfernt
+				MQTT Details wurden hinzugefügt (Text2speech Plugin kann auch auf einem anderen LB installiert sein)
