@@ -576,3 +576,55 @@
     padding-left: 10px !important;
   }
 }
+
+/* ==========================================================================
+ * Text2SIP Flipswitches
+ * Fixed soft/light background for LoxBerry v3/jQM and v4
+ * ========================================================================== */
+
+/* LBv4 / newer jQM flipswitch */
+#main_form .plugin-config-control .ui-flipswitch,
+#main_form .t2sip-admin-log .ui-flipswitch,
+#main_form .plugin-config-control .ui-flipswitch.ui-flipswitch-active,
+#main_form .t2sip-admin-log .ui-flipswitch.ui-flipswitch-active {
+  background: #f2f3f5 !important;
+  background-color: #f2f3f5 !important;
+  background-image: none !important;
+  border-color: #bfc3c8 !important;
+  box-shadow: none !important;
+  color: #202020 !important;
+  text-shadow: none !important;
+}
+
+/* LBv4: beweglicher ON-Bereich */
+#main_form .plugin-config-control .ui-flipswitch .ui-flipswitch-on,
+#main_form .t2sip-admin-log .ui-flipswitch .ui-flipswitch-on,
+#main_form .plugin-config-control .ui-flipswitch .ui-flipswitch-off,
+#main_form .t2sip-admin-log .ui-flipswitch .ui-flipswitch-off {
+  background: #f2f3f5 !important;
+  background-color: #f2f3f5 !important;
+  background-image: none !important;
+  color: #202020 !important;
+  text-shadow: none !important;
+}
+
+/* LBv3 / klassischer jQM slider-switch */
+#main_form .plugin-config-control .ui-slider-switch,
+#main_form .t2sip-admin-log .ui-slider-switch,
+#main_form .plugin-config-control .ui-slider-switch .ui-slider-label,
+#main_form .t2sip-admin-log .ui-slider-switch .ui-slider-label {
+  background: #f2f3f5 !important;
+  background-color: #f2f3f5 !important;
+  background-image: none !important;
+  border-color: #bfc3c8 !important;
+  color: #202020 !important;
+  text-shadow: none !important;
+}
+
+/* Schalterknopf bewusst hell/weiß lassen */
+#main_form .plugin-config-control .ui-slider-switch .ui-slider-handle,
+#main_form .t2sip-admin-log .ui-slider-switch .ui-slider-handle {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
