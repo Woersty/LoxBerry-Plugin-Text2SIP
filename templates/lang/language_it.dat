@@ -103,3 +103,8 @@ TXT_MQTT_LOCAL_HINT="Il broker MQTT interno di questo LoxBerry viene utilizzato 
 TXT_MQTT_PASSWORD_SHOW="Mostra password"
 TXT_MQTT_PASSWORD_HIDE="Nascondi password"
 TXT_MQTT_CONNECTION_INVALID="Connessione MQTT non riuscita. Controllare Host/IP, porta, nome utente e password."
+
+; Pocket-TTS offline provider
+TXT_POCKETTTS_INSTALLING="Pocket-TTS: installazione del modello linguistico …"
+TXT_POCKETTTS_READY="Pocket-TTS: il modello linguistico è pronto."
+TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS: impossibile installare il modello. La sintesi vocale offline non è disponibile per questa lingua."

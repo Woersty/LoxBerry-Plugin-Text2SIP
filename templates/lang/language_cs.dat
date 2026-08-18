@@ -103,3 +103,8 @@ TXT_MQTT_LOCAL_HINT="Interní MQTT broker tohoto LoxBerry se použije automatick
 TXT_MQTT_PASSWORD_SHOW="Zobrazit heslo"
 TXT_MQTT_PASSWORD_HIDE="Skrýt heslo"
 TXT_MQTT_CONNECTION_INVALID="MQTT pripojeni se nezdarilo. Zkontrolujte Host/IP, port, uzivatelske jmeno a heslo."
+
+; Pocket-TTS offline provider
+TXT_POCKETTTS_INSTALLING="Pocket-TTS: instaluje se jazykový model …"
+TXT_POCKETTTS_READY="Pocket-TTS: jazykový model je připraven."
+TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS: jazykový model se nepodařilo nainstalovat. Offline TTS pro tento jazyk není k dispozici."

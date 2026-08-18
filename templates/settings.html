@@ -699,5 +699,46 @@
 					  setTimeout(fieldControl, 200);
 					});
 
-					$(document).on('change', '#PLUGIN_USE, #T2S_USE, #MQTT_MODE', fieldControl);
-					  </script>
+                    $(document).on('change', '#PLUGIN_USE, #T2S_USE, #MQTT_MODE', fieldControl);
+
+                    /* Pocket-TTS: German is preinstalled in postroot. Other
+                     * language models are fetched only when the user selects
+                     * them while the local/offline provider is active. */
+                    var pocketTtsInstallBusy = {};
+                    $(document).on('change', "input[id^='P2W_lang'][id$='_code']", function() {
+                      if ((($('#T2S_USE').val() || 'off').toLowerCase()) === 'on') return;
+
+                      var lang = (($(this).val() || 'de') + '').toLowerCase();
+                      if (!/^(de|gb|us|es|fr|it)$/.test(lang)) return;
+                      if (lang === 'de' || pocketTtsInstallBusy[lang]) return;
+
+                      var m = (this.id || '').match(/^P2W_lang(\d+)_code$/);
+                      var vg = m ? m[1] : '';
+                      var $status = vg ? $('#call_result' + vg) : $('#form-error-message');
+                      pocketTtsInstallBusy[lang] = true;
+
+                      $status.removeClass('test2sip_job_failed').addClass('test2sip_job_ok')
+                             .html('<!--$TXT_POCKETTTS_INSTALLING-->').fadeTo('fast', 1);
+
+                      $.ajax({
+                        url: 'index.cgi',
+                        method: 'GET',
+                        dataType: 'json',
+                        data: { do: 'pockettts_install_language', lang: lang }
+                      }).done(function(resp) {
+                        if (resp && resp.ok) {
+                          $status.removeClass('test2sip_job_failed').addClass('test2sip_job_ok')
+                                 .html('<!--$TXT_POCKETTTS_READY-->');
+                        } else {
+                          $status.removeClass('test2sip_job_ok').addClass('test2sip_job_failed')
+                                 .html('<!--$TXT_POCKETTTS_INSTALL_FAILED-->');
+                        }
+                      }).fail(function() {
+                        $status.removeClass('test2sip_job_ok').addClass('test2sip_job_failed')
+                               .html('<!--$TXT_POCKETTTS_INSTALL_FAILED-->');
+                      }).always(function() {
+                        pocketTtsInstallBusy[lang] = false;
+                        setTimeout(function() { $status.fadeTo('slow', 0); }, 5000);
+                      });
+                    });
+                      </script>

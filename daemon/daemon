@@ -5,8 +5,8 @@
 # Required-Stop:     $remote_fs $syslog $network
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Configure the LoxBerry Text2SIP plugin runtime files.
-# Description:       Idempotent runtime-directory and permission setup.
+# Short-Description: Configure Text2SIP runtime and manage resident Pocket-TTS.
+# Description:       Idempotent runtime setup plus detached local Pocket-TTS server.
 ### END INIT INFO
 
 PATH="/sbin:/bin:/usr/sbin:/usr/bin"
@@ -17,22 +17,87 @@ configfile="$configdir/Text2SIP.cfg"
 flagfile="$configdir/modify.me"
 datafolder="REPLACELBHOMEDIR/data/plugins/text2sip"
 wavfolder="$datafolder/wav"
+ramfolder="/run/shm/text2sip"
+pocketram="/run/shm/text2sip-pockettts"
+serverctl="REPLACELBHOMEDIR/bin/plugins/text2sip/pockettts/pockettts_server.sh"
 
-mkdir -p "$(dirname "$logfile")" "$configdir" "$wavfolder"
-touch "$logfile"
-chown loxberry:loxberry "$logfile" "$wavfolder" 2>/dev/null || true
-chmod 660 "$logfile" 2>/dev/null || true
-chmod 755 "$wavfolder" 2>/dev/null || true
+dlog() {
+    mkdir -p "$(dirname "$logfile")" 2>/dev/null || true
+    printf '%s %s\n' "$(date '+%b %e %H:%M:%S')" "$*" >> "$logfile" 2>/dev/null || true
+}
 
-if [ -f "$configfile" ]; then
-    chown loxberry:loxberry "$configfile" 2>/dev/null || true
-    chmod 664 "$configfile" 2>/dev/null || true
-fi
+runtime_setup() {
+    mkdir -p "$(dirname "$logfile")" "$configdir" "$wavfolder" "$ramfolder" "$pocketram"
+    touch "$logfile"
+    chown loxberry:loxberry "$logfile" "$wavfolder" "$ramfolder" "$pocketram" 2>/dev/null || true
+    chmod 660 "$logfile" 2>/dev/null || true
+    chmod 775 "$wavfolder" "$ramfolder" "$pocketram" 2>/dev/null || true
 
-if [ -r "$flagfile" ]; then
-    echo "$(date '+%b %e %H:%M:%S') modify.me found. Applying Text2SIP runtime setup." >> "$logfile"
-    rm -f "$flagfile"
-    echo "$(date '+%b %e %H:%M:%S') Text2SIP runtime setup completed." >> "$logfile"
-fi
+    if [ -f "$configfile" ]; then
+        chown loxberry:loxberry "$configfile" 2>/dev/null || true
+        chmod 664 "$configfile" 2>/dev/null || true
+    fi
 
-exit 0
+    if [ -r "$flagfile" ]; then
+        dlog "modify.me found. Applying Text2SIP runtime setup."
+        rm -f "$flagfile"
+        dlog "Text2SIP runtime setup completed."
+    fi
+}
+
+server_start() {
+    [ -x "$serverctl" ] || return 0
+    if [ "$(id -u)" -eq 0 ]; then
+        runuser -u loxberry -- "$serverctl" start >> "$logfile" 2>&1 || return $?
+    else
+        "$serverctl" start >> "$logfile" 2>&1 || return $?
+    fi
+}
+
+server_stop() {
+    [ -x "$serverctl" ] || return 0
+    if [ "$(id -u)" -eq 0 ]; then
+        runuser -u loxberry -- "$serverctl" stop >> "$logfile" 2>&1 || return $?
+    else
+        "$serverctl" stop >> "$logfile" 2>&1 || return $?
+    fi
+}
+
+server_status() {
+    [ -x "$serverctl" ] || { echo "Pocket-TTS controller unavailable"; return 1; }
+    if [ "$(id -u)" -eq 0 ]; then
+        runuser -u loxberry -- "$serverctl" status
+    else
+        "$serverctl" status
+    fi
+}
+
+# LoxBerry historically invokes plugin daemon scripts without arguments, so an
+# empty action remains equivalent to "start". Explicit stop/restart/status are
+# handled correctly for service management and shutdown.
+action="${1:-start}"
+case "$action" in
+    start)
+        runtime_setup
+        server_start
+        exit $?
+        ;;
+    stop)
+        server_stop
+        exit $?
+        ;;
+    restart)
+        server_stop || true
+        runtime_setup
+        server_start
+        exit $?
+        ;;
+    status)
+        server_status
+        exit $?
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}" >&2
+        exit 64
+        ;;
+esac

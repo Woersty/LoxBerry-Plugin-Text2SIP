@@ -45,7 +45,7 @@ use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use Fcntl qw(:flock);
 use Fcntl qw(LOCK_EX LOCK_UN);
-use Time::HiRes qw(gettimeofday);
+use Time::HiRes qw(gettimeofday time);
 
 # Protokolle / Formate
 use JSON qw(decode_json encode_json);
@@ -79,7 +79,7 @@ our ($T2S_INSTALLED,$T2S_USE,$T2SminVers,$t2s_is_installed);
 our ($P2W_Text,$P2W_lang,$full_path_to_mp3,$mp3tmp,$ttsfile,$client);
 
 # Pfade/Jobs/Audio
-our ($pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$pico2wave,$cmd);
+our ($pluginjobfile,$pluginwavfile,$plugintmpfile,$pluginbindir,$plugindatadir,$cmd);
 
 ##########################################################################
 # Setup / Einlesen
@@ -121,12 +121,18 @@ $pluginconfigfile = "$pluginconfigdir/Text2SIP.cfg";
 make_path("$installfolder/log/plugins/$psubfolder")      unless -d "$installfolder/log/plugins/$psubfolder";
 make_path("$installfolder/data/plugins/$psubfolder/wav") unless -d "$installfolder/data/plugins/$psubfolder/wav";
 make_path("$installfolder/tmp/plugins/$psubfolder")      unless -d "$installfolder/tmp/plugins/$psubfolder";
+make_path("/run/shm/text2sip")                            unless -d "/run/shm/text2sip";
 
 # Binaries/Verzeichnisse
-$pico2wave     = "/usr/bin/pico2wave";
 $pluginbindir  = "$installfolder/webfrontend/htmlauth/plugins/$psubfolder/bin";
-$plugindatadir = "$installfolder/data/plugins/$psubfolder/wav";
+$plugindatadir = "/run/shm/text2sip";  # transient call audio/job files in RAM (tmpfs)
 $plugintmpfile = "$installfolder/tmp/plugins/$psubfolder";
+our $pockettts_base    = "$installfolder/bin/plugins/$psubfolder/pockettts";
+our $pockettts_runtime = "$installfolder/data/plugins/$psubfolder/pockettts";
+our $pockettts_cli     = "$pockettts_runtime/venv/bin/pocket-tts";
+our $pockettts_helper     = "$pockettts_base/pockettts_language.sh";
+our $pockettts_server_ctl = "$pockettts_base/pockettts_server.sh";
+our $pockettts_server_url = "http://127.0.0.1:8765";
 
 # Kodier-Helfer. Config::Simple, Backticks und die Kommandozeile arbeiten mit
 # UTF-8-Bytes; CGI (-utf8) und die Sprachdateien liefern Zeichen. as_chars()
@@ -146,6 +152,62 @@ sub as_bytes {
     my $v = shift;
     return '' unless defined $v;
     return utf8::is_utf8($v) ? encode_utf8($v) : $v;
+}
+
+# Pocket-TTS mapping. Keep the existing UI country codes/config format so no
+# migration is required. The distilled models are preferred on LoxBerry CPUs;
+# French currently has only the 24-layer multilingual release model.
+sub pockettts_language_config {
+    my ($lang) = @_;
+    $lang = lc($lang // 'de');
+
+    my %map = (
+        'de'    => ['de', 'german',     'juergen'],
+        'de-de' => ['de', 'german',     'juergen'],
+        'gb'    => ['gb', 'english',    'alba'],
+        'en-gb' => ['gb', 'english',    'alba'],
+        'us'    => ['us', 'english',    'alba'],
+        'en-us' => ['us', 'english',    'alba'],
+        'es'    => ['es', 'spanish',    'lola'],
+        'es-es' => ['es', 'spanish',    'lola'],
+        'fr'    => ['fr', 'french_24l', 'estelle'],
+        'fr-fr' => ['fr', 'french_24l', 'estelle'],
+        'it'    => ['it', 'italian',    'giovanni'],
+        'it-it' => ['it', 'italian',    'giovanni'],
+    );
+    return $map{$lang} || $map{'de'};
+}
+
+# application/x-www-form-urlencoded encoder for Pocket-TTS' local FastAPI /tts
+# endpoint. Work on UTF-8 bytes so umlauts and other non-ASCII text survive.
+sub pockettts_form_escape {
+    my ($value) = @_;
+    my $bytes = as_bytes(defined $value ? $value : '');
+    $bytes =~ s/([^A-Za-z0-9\-._~])/sprintf("%%%02X", ord($1))/eg;
+    return $bytes;
+}
+
+sub pockettts_server_healthy {
+    my $wget = ($wgetbin && -x $wgetbin) ? $wgetbin : '/usr/bin/wget';
+    return 0 unless -x $wget;
+    my $rc = system($wget, '-q', '-T', '1', '-O', '/dev/null', "$pockettts_server_url/health");
+    return $rc == 0 ? 1 : 0;
+}
+
+sub pockettts_server_start_and_wait {
+    return 1 if pockettts_server_healthy();
+    return 0 unless -x $pockettts_server_ctl;
+
+    # CGI runs as loxberry, so the controller can launch the detached process
+    # directly. Avoid starting the CLI model in parallel while the server loads.
+    system($pockettts_server_ctl, 'start');
+
+    my $deadline = time() + 20.0;
+    while (time() < $deadline) {
+        return 1 if pockettts_server_healthy();
+        select(undef, undef, undef, 0.25);
+    }
+    return 0;
 }
 
 # MQTT 3.1.1 Hilfsfunktionen fuer die Validierung eines externen Brokers.
@@ -565,14 +627,31 @@ if ($do eq "makecall")
             }
 
         } else {
-            # Normale Miniserver-URL
-            my $msinfo = `$wgetbin -a $lbplogdir/$logfile --retry-connrefused --tries=2 --waitretry=1 --timeout=1 --passive-ftp -nH -qO- "$SIPCMD_MSINFO" 2>&1 | grep value | cut -d'"' -f4`;
-            chomp $msinfo;
+            # Normale Miniserver-URL. Wget wird ohne Shell gestartet, damit
+            # Zugangsdaten weder durch Shell-Quoting noch durch wget -a im Log
+            # landen. Den value-Parameter parsen wir direkt in Perl.
+            my $ms_raw = '';
+            my $wget_status = 1;
+            if (open my $wh, '-|', $wgetbin,
+                    '--retry-connrefused', '--tries=2', '--waitretry=1',
+                    '--timeout=1', '--passive-ftp', '-nH', '-qO-',
+                    $SIPCMD_MSINFO) {
+                local $/;
+                $ms_raw = <$wh> // '';
+                close $wh;
+                $wget_status = $?;
+            }
+            my ($msinfo) = $ms_raw =~ /\bvalue=["']([^"']*)["']/i;
+            $msinfo = '' unless defined $msinfo;
             $msinfo = as_chars($msinfo);
 
-            if ($? ne 0 || $msinfo eq '') {
-                my $text = as_bytes($phraseplugin->param('ERROR0006')." ".$SIPCMD_MSINFO." ".$msinfo);
-                system("echo '$text' >> $lbplogdir/$logfile");
+            if ($wget_status != 0 || $msinfo eq '') {
+                my $safe_msinfo_url = mask_secrets($SIPCMD_MSINFO);
+                my $text = as_bytes($phraseplugin->param('ERROR0006')." ".$safe_msinfo_url);
+                if (open my $elf, '>>:raw', "$lbplogdir/$logfile") {
+                    print {$elf} $text . "\n";
+                    close $elf;
+                }
 
                 # Fallback: &tts oder unknown auf "##"
                 if ($P2W_Text =~ /##/) {
@@ -644,14 +723,38 @@ if ($do eq "makecall")
         &t2svoice();   # T2S via internal or external MQTT broker
 
         if ( !$t2s_suppress_fallback && ( !-e $pluginwavfile || -s $pluginwavfile <= 0 ) ) {
-            system('echo "## ROUTE: t2svoice produced no WAV -> fallback to Pico" >> ' . $lbplogdir . '/' . $logfile);
-            &usepico();
+            system('echo "## ROUTE: t2svoice produced no WAV -> fallback to Pocket-TTS" >> ' . $lbplogdir . '/' . $logfile);
+            &usepockettts();
         }
     } else {
-        &usepico();    # Pico
+        &usepockettts();    # Offline TTS provider
     }
 
     #************************** End TTS routing (CONFIG-ONLY) ***************************
+
+    # No third offline fallback exists anymore. If neither Text2Speech nor
+    # Pocket-TTS produced audio, abort before creating a SIP job instead of
+    # starting pjsua with a missing/empty file.
+    my $tts_wav_candidate = $pluginwavfile;
+    $tts_wav_candidate =~ s/_wav$/.wav/i;
+    my $tts_audio_ok =
+        (-e $pluginwavfile && -s $pluginwavfile > 0) ||
+        (-e $tts_wav_candidate && -s $tts_wav_candidate > 0);
+    if (!$tts_audio_ok) {
+        my $m = "## ERROR: No usable TTS audio produced; call aborted";
+        if (open my $lf, '>>:encoding(UTF-8)', "$lbplogdir/$logfile") {
+            print $lf _ts() . " $m\n";
+            close $lf;
+        }
+        job_log_end();
+        print "\n<span class='test2sip_job_failed'>"
+            . ($phraseplugin->param('TXT_JOB_QUEUED_FAIL') // 'Call failed')
+            . "</span>\n<br/>TTS\n";
+        unlink $pluginwavfile if -e $pluginwavfile;
+        unlink $tts_wav_candidate if -e $tts_wav_candidate;
+        unlink $plugintmpfile if -e $plugintmpfile;
+        exit;
+    }
 
     if ( $SIPCMD_CALL_TIMEOUT < 1 ) { $SIPCMD_CALL_TIMEOUT = 60 };
 
@@ -660,7 +763,7 @@ if ($do eq "makecall")
     # ---------------------------------------------------------------
     # pjsua-Anrufschicht (ersetzt sipcmd + sipcall_wrapper.pl).
     # --bound-addr bindet an die LAN-IP -> kein docker0/OPAL-Hack noetig.
-    # Die WAV ($pluginwavfile) hat die gewaehlte TTS-Engine (pico2wave oder
+    # Die WAV hat die gewaehlte TTS-Engine (Pocket-TTS oder
     # Text2Speech-Plugin) bereits erzeugt; pjsua spielt sie NACH CONFIRMED
     # ab. DTMF-/Bestaetigungs-/Result-URL-Logik: pjsua_call.pl.
     # ---------------------------------------------------------------
@@ -683,7 +786,7 @@ if ($do eq "makecall")
 
     # Die TTS-Kette erzeugt zwei Dateien: eine echte RIFF/WAVE ($wav_path, .wav)
     # und ein headerloses RAW-s16le ($pluginwavfile, _wav) fuer sipcmds v-Kommando.
-    # pjsua braucht die echte WAV -> aus dem _wav-Namen ableiten (siehe usepico/t2svoice).
+    # pjsua braucht die echte WAV -> aus dem _wav-Namen ableiten.
     my $wav_for_pjsua = $pluginwavfile;
     $wav_for_pjsua =~ s/_wav$/.wav/i;
     $wav_for_pjsua = $pluginwavfile unless -e $wav_for_pjsua;  # Fallback (Diagnose im Log)
@@ -733,9 +836,18 @@ if ($do eq "makecall")
         exit;
     }
 
-    # In die Task-Spooler-Queue stellen (CGI kehrt sofort zurueck; Anruf laeuft im Hintergrund).
-    system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>$lbplogdir/$logfile");
-    system("tsp bash $pluginjobfile >> $lbplogdir/$logfile 2>&1");
+    # In eine eigene Text2SIP-Task-Spooler-Queue stellen. Socket und tsp-
+    # Ausgabedateien liegen in /run/shm, damit weder /tmp noch eine Queue eines
+    # anderen Plugins verwendet wird. Das macht auch den Uninstall eindeutig.
+    my $tsp_socket = '/run/shm/text2sip/task-spooler.sock';
+    my $tsp_label  = 'Text2SIP-guide-' . int($guide);
+    system ("echo -n 'Add job for guide ".$guide." to queue as #' 2>&1 >>" . shell_quote("$lbplogdir/$logfile"));
+    my $tsp_cmd = 'TS_SOCKET=' . shell_quote($tsp_socket)
+                . ' TMPDIR=' . shell_quote('/run/shm/text2sip')
+                . ' tsp -L ' . shell_quote($tsp_label)
+                . ' bash ' . shell_quote($pluginjobfile)
+                . ' >> ' . shell_quote("$lbplogdir/$logfile") . ' 2>&1';
+    system($tsp_cmd);
     if ( $? == 0 ) {
       print "\n<br/>".$phraseplugin->param('TXT_JOB_QUEUED_OK');
       print "\n<script> \$('#call_result".$guide."').removeClass( 'test2sip_job_failed' ).addClass( 'test2sip_job_ok' ); </script>\n";
@@ -771,6 +883,37 @@ elsif ($do eq "check_mqtt_endpoint")
 
     my $ok = mqtt_connection_valid($host, $port, $user, $pass) ? 1 : 0;
     print encode_json({ ok => $ok });
+    exit;
+}
+
+#--------------- Pocket-TTS language installation ---------------
+elsif ($do eq "pockettts_install_language")
+{
+    print header(-type => 'application/json', -charset => 'UTF-8');
+
+    my $requested = lc(param('lang') // '');
+    $requested =~ s/[^a-z]//g;
+    my %allowed = map { $_ => 1 } qw(de gb us es fr it);
+
+    if (!$allowed{$requested}) {
+        print encode_json({ ok => 0, code => $requested, error => 'unsupported_language' });
+        exit;
+    }
+
+    if (!-x $pockettts_helper) {
+        print encode_json({ ok => 0, code => $requested, error => 'installer_missing' });
+        exit;
+    }
+
+    # The helper writes all child output to the plugin log, keeping this response valid JSON.
+    my $rc = system($pockettts_helper, 'install', $requested);
+    my $exit_code = ($rc == -1) ? 255 : ($rc >> 8);
+
+    print encode_json({
+        ok   => ($exit_code == 0 ? 1 : 0),
+        code => $requested,
+        exit => $exit_code,
+    });
     exit;
 }
 
@@ -1307,13 +1450,13 @@ sub t2svoice {
     $log->("## Response topic = $resp_topic");
     $log->("## Correlation ID = $corr");
 
-    # Ensure text exists, otherwise Pico fallback
+    # Ensure text exists; the offline fallback is Pocket-TTS
     $P2W_Text //= '';
     $P2W_Text =~ s/\R//g;   # remove newlines
 
     if ($P2W_Text eq '') {
-        $log->("## Empty TTS text – using Pico fallback");
-        return usepico();
+        $log->("## Empty TTS text – using Pocket-TTS fallback");
+        return usepockettts();
     }
 
     # ----------------------------------------------------------------------
@@ -1387,8 +1530,8 @@ sub t2svoice {
 
     if ($mqtt_mode eq 'remote') {
         if ($host eq '') {
-            $log->("## ERROR: External MQTT broker selected but host is empty – using Pico fallback");
-            return usepico();
+            $log->("## ERROR: External MQTT broker selected but host is empty – using Pocket-TTS fallback");
+            return usepockettts();
         }
         $log->("## Using external MQTT broker $host:$port");
     } else {
@@ -1403,13 +1546,13 @@ sub t2svoice {
         $mqtt->login($user, $pass) if $user ne '' || $pass ne '';
         1;
     } or do {
-        $log->("## MQTT connect/login failed for $mqtt_mode broker – using Pico fallback");
-        return usepico();
+        $log->("## MQTT connect/login failed for $mqtt_mode broker – using Pocket-TTS fallback");
+        return usepockettts();
     };
 
     if (!$mqtt) {
-        $log->("## MQTT object not created – using Pico fallback");
-        return usepico();
+        $log->("## MQTT object not created – using Pocket-TTS fallback");
+        return usepockettts();
     }
 
     # ----------------------------------------------------------------------
@@ -1424,7 +1567,7 @@ sub t2svoice {
 
         # Hard abort from master error → NO EXIT → fallback!
         if (our $t2s_abort_all && $t2s_abort_all == 1) {
-            $log->("## MQTT subscriber reported error – will fallback to Pico");
+            $log->("## MQTT subscriber reported error – will fallback to Pocket-TTS");
             return;
         }
 
@@ -1479,142 +1622,156 @@ sub t2svoice {
     # ----------------------------------------------------------------------
     # 10) Fallbacks (ALL POSSIBLE ERRORS)
     # ----------------------------------------------------------------------
-    $log->("## No valid MQTT response – using Pico fallback");
-    return usepico();
+    $log->("## No valid MQTT response – using Pocket-TTS fallback");
+    return usepockettts();
 }
 
 
 ##########################################################################
-# Use Pico for voice
+# Use Pocket-TTS for offline voice
 ##########################################################################
 
-sub usepico
+sub usepockettts
 {
-	my $sz_inB;
-	my $sz_wavB;
-	my $sz_rawB;
-    # --- Log-Helpers ---
     my $log = sub {
         open my $fh, '>>', "$lbplogdir/$logfile";
         print $fh _ts(), " $_[0]\n";
         close $fh;
     };
-	
-    # <<< Änderung: $job schreibt direkt ins $logfile, NICHT ins Jobfile >>>
+
     my $job = sub {
-		my ($msg) = @_;
-		open my $fh, '>>', "$lbplogdir/$logfile" or return;
-		print $fh _ts(), " $msg\n";
-		close $fh;
-	};
+        my ($msg) = @_;
+        open my $fh, '>>', "$lbplogdir/$logfile" or return;
+        print $fh _ts(), " $msg\n";
+        close $fh;
+    };
 
-    # --- Binaries prüfen ---
-	my $ff  = $ffmpeg    || '/usr/bin/ffmpeg';
-	my $p2w = $pico2wave || '/usr/bin/pico2wave';
-	if (!-x $p2w) { $log->("## ERROR: pico2wave not executable: $p2w"); return; }
-	if (!-x $ff ) { $log->("## ERROR: ffmpeg not executable: $ff");   return; }
+    my $ff = $ffmpeg || '/usr/bin/ffmpeg';
+    if (!-x $pockettts_cli) {
+        $log->("## ERROR: Pocket-TTS unavailable: $pockettts_cli");
+        return 0;
+    }
+    if (!-x $ff) {
+        $log->("## ERROR: ffmpeg not executable: $ff");
+        return 0;
+    }
 
-	# --- Rahmen-Infos loggen ---
-	my $pre_ms = 100;                         # Vorlaufstille
-	my $af     = "adelay=${pre_ms}|${pre_ms},volume=0.9";
-	$log->("## usepico start lang=$P2W_lang pre_silence=${pre_ms}ms ffmpeg=$ff pico2wave=$p2w");
-	$log->("## target base=$pluginwavfile tmp=$plugintmpfile");
+    my ($ui_code, $model, $voice) = @{ pockettts_language_config($P2W_lang) };
+    my $pre_ms = 100;
+    my $af = "adelay=${pre_ms}|${pre_ms},volume=0.9";
 
-	# UTF-8 für pico2wave absichern
-	$ENV{LC_ALL} = 'C.UTF-8';
-	$ENV{LANG}   = 'C.UTF-8';
+    $ENV{LC_ALL} = 'C.UTF-8';
+    $ENV{LANG} = 'C.UTF-8';
+    $ENV{HF_HOME} = "$pockettts_runtime/cache/huggingface";
+    $ENV{HUGGINGFACE_HUB_CACHE} = "$pockettts_runtime/cache/huggingface/hub";
+    $ENV{XDG_CACHE_HOME} = "$pockettts_runtime/cache/xdg";
+    $ENV{TORCH_HOME} = "$pockettts_runtime/cache/torch";
+    $ENV{TMPDIR} = '/run/shm/text2sip-pockettts';
 
-	# --- 1) Pico: Text -> TMP-WAV ---
-	$job->("## Generating voice (pico2wave)");
-	my $text = as_bytes($P2W_Text);
+    make_path($ENV{TMPDIR}) unless -d $ENV{TMPDIR};
 
-	# stderr temporär ins Plugin-Log umleiten
-	open my $SAVEDERR, ">&", \*STDERR;
-	open STDERR, ">>", "$lbplogdir/$logfile";
+    my $source_wav = "$ENV{TMPDIR}/tts-$$-" . int(rand(1_000_000)) . '.wav';
+    unlink $source_wav;
 
-	# WICHTIG: LIST-FORM (keine Shell, keine Expansion)
-	my $rc_p2w = system($p2w, '-l', $P2W_lang, '-w', $plugintmpfile, $text);
+    $log->("## usepockettts start lang=$P2W_lang model=$model voice=$voice pre_silence=${pre_ms}ms");
+    $job->("## Generating voice (Pocket-TTS)");
 
-	# stderr zurücksetzen
-	open STDERR, ">&", $SAVEDERR; close $SAVEDERR;
+    my $text = as_bytes($P2W_Text);
+    my $rc_tts;
+    my $route = 'cli';
+    my $started = time();
 
-	my $sz_in = (-e $plugintmpfile) ? (-s $plugintmpfile) : 0;
-	my $exit  = ($rc_p2w >> 8);
-	my $sig   = ($rc_p2w & 127);
-	$log->("## pico2wave exit=$exit signal=$sig size=${sz_in}B -> $plugintmpfile");
+    # Stage 8 fast path: keep the German model resident in memory and use the
+    # official local /tts HTTP API. Other languages keep the existing CLI path
+    # for now so only one model occupies RAM permanently.
+    if ($model eq 'german' && pockettts_server_start_and_wait()) {
+        my $wget = ($wgetbin && -x $wgetbin) ? $wgetbin : '/usr/bin/wget';
+        my $post = 'text=' . pockettts_form_escape($P2W_Text)
+                 . '&voice_url=' . pockettts_form_escape($voice);
+        $route = 'server';
+        $rc_tts = system(
+            $wget, '-q', '-T', '120', '-O', $source_wav,
+            '--header=Content-Type: application/x-www-form-urlencoded',
+            '--post-data=' . $post,
+            "$pockettts_server_url/tts"
+        );
+    } else {
+        open my $SAVEDERR, '>&', \*STDERR;
+        open STDERR, '>>', "$lbplogdir/$logfile";
+        $rc_tts = system(
+            $pockettts_cli, 'generate',
+            '--language', $model,
+            '--voice', $voice,
+            '--text', $text,
+            '--output-path', $source_wav,
+            '--quiet'
+        );
+        open STDERR, '>&', $SAVEDERR;
+        close $SAVEDERR;
+    }
 
-	# Erfolg NUR über Größe bewerten (pico2wave kann trotz non-zero exit brauchbare WAV liefern)
-	if ($sz_in < 128) {
-		$log->("## ERROR: pico2wave output missing/too small (text_len=".length($text).")");
-		return;
-	}
+    my $elapsed = sprintf('%.3f', time() - $started);
+    my $sz_in = (-e $source_wav) ? (-s $source_wav) : 0;
+    my $exit = ($rc_tts == -1) ? 255 : ($rc_tts >> 8);
+    $log->("## Pocket-TTS route=$route exit=$exit generation=${elapsed}s size=${sz_in}B -> $source_wav");
 
-    # --- 2) Ziele ableiten: .wav + _wav ---
+    if ($exit != 0 || $sz_in < 128) {
+        unlink $source_wav;
+        $log->("## ERROR: Pocket-TTS output missing/too small (route=$route)");
+        return 0;
+    }
+
     my ($wav_path, $raw_path);
     if    ($pluginwavfile =~ /_wav$/i){ ($wav_path=$pluginwavfile)=~s/_wav$/.wav/i; $raw_path=$pluginwavfile; }
     elsif ($pluginwavfile =~ /\.wav$/i){ $wav_path=$pluginwavfile; ($raw_path=$pluginwavfile)=~s/\.wav$/_wav/i; }
     else { $wav_path=$pluginwavfile.'.wav'; $raw_path=$pluginwavfile.'_wav'; }
-    $log->("## targets wav=$wav_path raw=$raw_path");
 
-    # --- 3) ffmpeg: TMP -> WAV (Header) ---
     unlink $wav_path;
-    my $ff_wav = $ff
-        .' -hide_banner -loglevel error -nostdin -y'
-        .' -i "'.$plugintmpfile.'"'
-        .' -filter:a "'.$af.'" -ac 1 -ar 8000 -acodec pcm_s16le -f wav'
-        .' "'.$wav_path.'" 2>> '.$lbplogdir.'/'.$logfile;
-    $job->("ffmpeg(wav): $ff_wav") if ($DEBUG_USE||'') eq 'on';
-
-    my $rc1 = system($ff_wav);
+    my @ff_wav = (
+        $ff, '-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
+        '-i', $source_wav,
+        '-filter:a', $af,
+        '-ac', '1', '-ar', '8000', '-acodec', 'pcm_s16le', '-f', 'wav',
+        $wav_path
+    );
+    my $rc1 = system(@ff_wav);
     my $sz_wav = (-e $wav_path) ? (-s $wav_path) : 0;
-    my $exit1 = $rc1 >> 8;
-    $log->("## ffmpeg WAV rc=$rc1 exit=$exit1 size=$sz_wavB");
-
+    $log->("## Pocket-TTS ffmpeg WAV exit=".($rc1 >> 8)." size=${sz_wav}B");
     if ($rc1 != 0 || $sz_wav <= 0) {
-        $log->("## ERROR: ffmpeg WAV failed -> $wav_path");
-        return;
+        unlink $source_wav;
+        unlink $wav_path;
+        $log->("## ERROR: Pocket-TTS WAV conversion failed");
+        return 0;
     }
 
-    # --- 4) ffmpeg: TMP -> RAW s16le (headerlos) ---
     unlink $raw_path;
-    my $ff_raw = $ff
-        .' -hide_banner -loglevel error -nostdin -y'
-        .' -i "'.$plugintmpfile.'"'
-        .' -filter:a "'.$af.'" -ac 1 -ar 8000 -acodec pcm_s16le -f s16le'
-        .' "'.$raw_path.'" 2>> '.$lbplogdir.'/'.$logfile;
-    $job->("ffmpeg(raw): $ff_raw") if ($DEBUG_USE||'') eq 'on';
-
-    my $rc2 = system($ff_raw);
+    my @ff_raw = (
+        $ff, '-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
+        '-i', $source_wav,
+        '-filter:a', $af,
+        '-ac', '1', '-ar', '8000', '-acodec', 'pcm_s16le', '-f', 's16le',
+        $raw_path
+    );
+    my $rc2 = system(@ff_raw);
     my $sz_raw = (-e $raw_path) ? (-s $raw_path) : 0;
-    my $exit2 = $rc2 >> 8;
-    $log->("## ffmpeg RAW rc=$rc2 exit=$exit2 size=$sz_rawB");
-
+    unlink $source_wav;
+    $log->("## Pocket-TTS ffmpeg RAW exit=".($rc2 >> 8)." size=${sz_raw}B");
     if ($rc2 != 0 || $sz_raw <= 0) {
-        $log->("## ERROR: ffmpeg RAW failed -> $raw_path");
-        return;
+        unlink $wav_path;
+        unlink $raw_path;
+        $log->("## ERROR: Pocket-TTS RAW conversion failed");
+        return 0;
     }
 
-    # --- 5) Plausibilitäts-Check Dauer & Größen ---
-    # WAV: grob (44-Byte Header), PCM16 mono @8k => 16000 Bytes/s
     my $audio_bytes = $sz_wav > 44 ? ($sz_wav - 44) : $sz_wav;
     my $dur_wav = sprintf('%.2f', $audio_bytes / 16000.0);
     my $dur_raw = sprintf('%.2f', $sz_raw / 16000.0);
-    my $delta   = sprintf('%.0f', abs($dur_wav - $dur_raw) * 1000);  # ms
-
-    $log->("## DUR wav=${dur_wav}s raw=${dur_raw}s delta=${delta}ms");
-    if (abs($dur_wav - $dur_raw) > 0.3) {
-        $log->("## WARN: duration mismatch >300ms (prüfe Filter/Prepend)");
-    }
-    if ($dur_wav < 0.5) {
-        $log->("## WARN: very short output (<0.5s) – Eingabetext/Engine prüfen");
-    }
-
-    # --- 6) Abschluss ---
-    $log->("## usepico OK -> wav=$wav_path raw=$raw_path");
-    $log->("## ROUTE: t2svoice completed");
-	job_log_end();
+    $log->("## Pocket-TTS DUR wav=${dur_wav}s raw=${dur_raw}s");
+    $log->("## usepockettts OK -> wav=$wav_path raw=$raw_path");
+    $log->("## ROUTE: Pocket-TTS completed via $route");
+    job_log_end();
+    return 1;
 }
-
 
 
 ##########################################################################
@@ -1645,13 +1802,13 @@ sub usetts
     my $ff = $ffmpeg || '/usr/bin/ffmpeg';
     if (!-x $ff) {
         $log->("## ERROR: Binary ffmpeg not found: $ff");
-        &usepico; return;
+        &usepockettts; return;
     }
 
     # --- Sanity: Quelle vorhanden? ---
     if (!$full_path_to_mp3) {
-        $log->("## ERROR: full_path_to_mp3 leer – fallback auf Pico");
-        &usepico; return;
+        $log->("## ERROR: full_path_to_mp3 leer – fallback auf Pocket-TTS");
+        &usepockettts; return;
     }
     my $safe_mp3_url = mask_secrets($full_path_to_mp3);
     $log->("## MP3 URL: $safe_mp3_url");
@@ -1674,8 +1831,8 @@ sub usetts
             shell_quote($full_path_to_mp3),
             shell_quote("$lbplogdir/$logfile"));
     } else {
-        $log->("## ERROR: neither curl nor wget installed – fallback auf Pico");
-        &usepico; return;
+        $log->("## ERROR: neither curl nor wget installed – fallback auf Pocket-TTS");
+        &usepockettts; return;
     }
 
     # >>> Maskiertes Download-Kommando ins Log
@@ -1686,8 +1843,8 @@ sub usetts
     my $sz_mp3 = (-e $mp3tmp) ? -s $mp3tmp : 0;
     $log->("## Download rc=$rc_dl size=${sz_mp3}B -> $mp3tmp");
     if ($rc_dl != 0 || $sz_mp3 < 128) {  # <128B: sehr wahrscheinlich leer/HTML
-        $log->("## Download failed or file too small – fallback auf Pico");
-        &usepico; return;
+        $log->("## Download failed or file too small – fallback auf Pocket-TTS");
+        &usepockettts; return;
     }
     $job->("## Generated voice by T2S Plugin has been received");
 
@@ -1718,7 +1875,7 @@ sub usetts
         $log->('## ffmpeg ok '.$pluginwavfile.' size='.$sz_wav.'B dur='.$dur_wav.'s');
     } else {
         $log->('## ffmpeg failed (rc='.$rc.' exit='.$exit.') cmd='.$log_ff_cmd);
-        &usepico;  # Fallback
+        &usepockettts;  # Offline fallback
         $log->("## ROUTE: t2svoice completed");
         job_log_end();
         return;
@@ -1744,7 +1901,7 @@ sub mask_secrets {
     $s =~ s/(\bBearer\s+)[A-Za-z0-9\.\-_]+/$1***/ig;
 
     # Basic-Auth in URL (user:pass@host)
-    $s =~ s{(https?://[^:\s/]+:)[^@\s/]+(@)}{$1***$2}ig;
+    $s =~ s{(https?://[^:\s/]+:)[^@\s]+(@)}{$1***$2}ig;
 
     return $s;
 }

@@ -40,10 +40,20 @@ sub logline {
 }
 
 # --- WAV-Laenge (fuer einmalige Wiedergabe; --play-file loopt sonst) ---
+# ffprobe is shipped with ffmpeg in the LoxBerry standard image.
+# Use list-form open so the WAV path is never interpreted by a shell.
 my $wav_dur = 0;
-if ($o{wav} ne '' && -r $o{wav}) {
-    my $d = `sox --info -D "$o{wav}" 2>/dev/null`; chomp $d;
-    $wav_dur = ($d && $d =~ /^[\d.]+$/) ? $d + 0 : 0;
+if ($o{wav} ne '' && -r $o{wav} && -x '/usr/bin/ffprobe') {
+    if (open my $probe, '-|', '/usr/bin/ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            $o{wav}) {
+        my $d = <$probe>;
+        close $probe;
+        chomp $d if defined $d;
+        $wav_dur = ($d && $d =~ /^[\d.]+$/) ? $d + 0 : 0;
+    }
 }
 $wav_dur = 6 if $wav_dur <= 0;
 

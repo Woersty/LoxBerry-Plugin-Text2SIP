@@ -25,8 +25,6 @@ $plugindatadir      = $mydir . "/../../../../data/plugins/$psubdir/wav";
 $plugincfgfile      = $mydir . "/../../../../config/plugins/$psubdir/Text2SIP.cfg";
 $pluginlanguagefile = $mydir . "/../../../../templates/plugins/$psubdir/de/language.dat";
 
-$pico2wave     = "/usr/bin/pico2wave";
-$sox           = "/usr/bin/sox";
 $sipcmd        = $mydir . "/../../../../webfrontend/htmlauth/plugins/$psubdir/bin/sipcmd";
 $option_o      = ""; // Heavy sipcmd Debug (legacy)
 
