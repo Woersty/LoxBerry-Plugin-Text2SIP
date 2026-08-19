@@ -22,8 +22,8 @@ Changelog:
 				Pico2wave/SoX/RAW-Audio-Pfade entfernt und Installation verschlankt
 				Statusanzeige in den Konfigurationsblock verschoben und bei aktivem Plugin dauerhaft sichtbar
 				On-Demand-Sprachmodelle und residenter Sprachwechsel fuer DE/EN/ES/IT/PT (Low-Varianten)
-				Portugal zur Sprachauswahl hinzugefuegt
 				Franzoesisch on demand ueber french_24l/estelle ergaenzt (einzige 24L-Ausnahme)
 				CPU-PyTorch-Fehlerpfad abgesichert: bei Fehlschlag kein weiterer Pocket-TTS/CUDA-Dependency-Installationsversuch
 				Generische UI-Fehlermeldung fuer fehlgeschlagene Sprachmodell-Installationen aller Pocket-TTS-Sprachen
 				Native Browser-Dialoge beim Konfigurationsimport durch LoxBerry/jQuery-UI-Modals ersetzt
+				Preinstall-Speichercheck: 2 GiB Mindestfreiraum fuer neue Pocket-TTS-Runtime; kompatible Upgrade-Runtime wird erkannt und wiederverwendet
