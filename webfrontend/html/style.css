@@ -628,3 +628,73 @@
   background-color: #ffffff !important;
   background-image: none !important;
 }
+
+/* ==========================================================================
+ * Pocket-TTS resident server watchdog status
+ * Lives inside Administration -> Configuration and is visible whenever
+ * Text2SIP itself is enabled.
+ * ========================================================================== */
+#main_form .pockettts-server-status {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(126,126,126,0.45);
+  background: transparent !important;
+  color: inherit;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+#main_form .pockettts-server-status.is-visible {
+  display: flex !important;
+}
+
+#main_form .pockettts-status-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+}
+
+#main_form .pockettts-status-label {
+  font-size: 0.78em;
+  line-height: 1.25em;
+  white-space: nowrap;
+}
+
+#main_form .pockettts-status-dot {
+  display: inline-block;
+  min-width: 18px;
+  font-size: 15px;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
+/* Same declared width as Export/Import directly above. jQM supplies the same
+ * button styling; only spacing/visibility are owned here. */
+#main_form .pockettts-restart-button {
+  width: 130px !important;
+  margin: 6px auto 0 !important;
+  box-shadow: none;
+}
+
+#main_form .pockettts-restart-button.ui-disabled,
+#main_form .pockettts-restart-button[disabled] {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+#main_form .pockettts-status-note {
+  width: 100%;
+  min-height: 0;
+  margin-top: 3px;
+  font-size: 0.72em;
+  line-height: 1.2em;
+  opacity: 0.8;
+}
+

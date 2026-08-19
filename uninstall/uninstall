@@ -70,10 +70,40 @@ sub stop_text2sip_tsp_queue {
     }
 }
 
-# Stop the resident Pocket-TTS model before deleting its venv/cache.
+# Stop the watchdog first so it cannot restart Pocket-TTS while uninstall removes
+# the runtime. Then stop the resident model process itself.
+my $pocket_watchdog_ctl = "$lbhome/bin/plugins/text2sip/pockettts/pockettts_watchdog.sh";
+if (-x $pocket_watchdog_ctl) {
+    system($pocket_watchdog_ctl, 'stop');
+}
 my $pocket_server_ctl = "$lbhome/bin/plugins/text2sip/pockettts/pockettts_server.sh";
 if (-x $pocket_server_ctl) {
     system($pocket_server_ctl, 'stop');
+}
+
+# Fallback for interrupted/partial installations where the controllers are gone.
+# Kill a surviving watchdog only when its cmdline clearly belongs to Text2SIP.
+my $watchdog_pidfile = '/run/shm/text2sip-pockettts/watchdog.pid';
+if (-r $watchdog_pidfile) {
+    if (open my $wpf, '<', $watchdog_pidfile) {
+        my $pid = <$wpf> // '';
+        close $wpf;
+        chomp $pid;
+        if ($pid =~ /^\d+$/ && -d "/proc/$pid") {
+            my $cmdline = '';
+            if (open my $wcf, '<:raw', "/proc/$pid/cmdline") {
+                local $/;
+                $cmdline = <$wcf> // '';
+                close $wcf;
+                $cmdline =~ s/\0/ /g;
+            }
+            if ($cmdline =~ /pockettts_watchdog\.sh/i) {
+                kill 'TERM', $pid;
+                select undef, undef, undef, 0.3;
+                kill 'KILL', $pid if -d "/proc/$pid";
+            }
+        }
+    }
 }
 
 # Fallback for interrupted/partial installations where the controller is gone
@@ -146,9 +176,12 @@ for my $dir (bsd_glob("$lbhome/data/plugins/text2sip_upgrade_*")) {
 }
 
 # Interrupted POSTROOT runs may leave only their small capture files behind.
-for my $tmp (bsd_glob('/tmp/text2sip-postroot.*')) {
-    next unless -f $tmp;
-    unlink $tmp or warn "Could not remove $tmp: $!\n";
+# Current releases use /run/shm; /tmp is retained here only for older releases.
+for my $pattern ('/run/shm/text2sip-postroot.*', '/tmp/text2sip-postroot.*') {
+    for my $tmp (bsd_glob($pattern)) {
+        next unless -f $tmp;
+        unlink $tmp or warn "Could not remove $tmp: $!\n";
+    }
 }
 
 # Current releases do not install or operate a Mosquitto bridge. These are

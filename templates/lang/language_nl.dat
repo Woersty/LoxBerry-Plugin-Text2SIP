@@ -84,6 +84,8 @@ TXT_SIPCMD_MSINFO="URL om waarde van Miniserver te lezen:"
 TXT_BTN_BLOCK_CONFIG="Configuration"
 TXT_BTN_CONFIG_EXPORT="Export"
 TXT_BTN_CONFIG_IMPORT="Import"
+TXT_CONFIG_IMPORT_TITLE="Configuratie importeren"
+TXT_CONFIG_IMPORT_CANCEL="Annuleren"
 TXT_CONFIG_IMPORT_CONFIRM="Importing overwrites all current settings. Continue?"
 TXT_CONFIG_IMPORT_OK="The configuration has been imported."
 TXT_CONFIG_IMPORT_FAILED="The configuration could not be imported."
@@ -107,4 +109,12 @@ TXT_MQTT_CONNECTION_INVALID="MQTT-verbinding mislukt. Controleer Host/IP, poort,
 ; Pocket-TTS offline provider
 TXT_POCKETTTS_INSTALLING="Pocket-TTS: taalmodel wordt geïnstalleerd …"
 TXT_POCKETTTS_READY="Pocket-TTS: taalmodel is gereed."
-TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS: taalmodel kon niet worden geïnstalleerd. Offline TTS is voor deze taal niet beschikbaar."
+TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS: het taalmodel kon niet worden geïnstalleerd. Controleer de vrije schijfruimte en de internetverbinding."
+
+; Pocket-TTS resident server watchdog
+TXT_POCKETTTS_SERVER_STATUS="Pocket-TTS-server online:"
+TXT_POCKETTTS_SERVER_RESTART="Server herstarten"
+TXT_POCKETTTS_SERVER_RESTARTING="Server wordt herstart …"
+TXT_POCKETTTS_SERVER_RESTART_FAILED="Herstart mislukt"
+TXT_POCKETTTS_SERVER_CHECKING="Status wordt gecontroleerd …"
+TXT_EMPTY_LOG_DIALOG_AUTHENTICATE="Authenticatie mislukt."

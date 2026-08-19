@@ -15,11 +15,10 @@ logfile="REPLACELBHOMEDIR/log/plugins/text2sip/Text2SIP.log"
 configdir="REPLACELBHOMEDIR/config/plugins/text2sip"
 configfile="$configdir/Text2SIP.cfg"
 flagfile="$configdir/modify.me"
-datafolder="REPLACELBHOMEDIR/data/plugins/text2sip"
-wavfolder="$datafolder/wav"
 ramfolder="/run/shm/text2sip"
 pocketram="/run/shm/text2sip-pockettts"
 serverctl="REPLACELBHOMEDIR/bin/plugins/text2sip/pockettts/pockettts_server.sh"
+watchdogctl="REPLACELBHOMEDIR/bin/plugins/text2sip/pockettts/pockettts_watchdog.sh"
 
 dlog() {
     mkdir -p "$(dirname "$logfile")" 2>/dev/null || true
@@ -27,11 +26,11 @@ dlog() {
 }
 
 runtime_setup() {
-    mkdir -p "$(dirname "$logfile")" "$configdir" "$wavfolder" "$ramfolder" "$pocketram"
+    mkdir -p "$(dirname "$logfile")" "$configdir" "$ramfolder" "$pocketram"
     touch "$logfile"
-    chown loxberry:loxberry "$logfile" "$wavfolder" "$ramfolder" "$pocketram" 2>/dev/null || true
+    chown loxberry:loxberry "$logfile" "$ramfolder" "$pocketram" 2>/dev/null || true
     chmod 660 "$logfile" 2>/dev/null || true
-    chmod 775 "$wavfolder" "$ramfolder" "$pocketram" 2>/dev/null || true
+    chmod 775 "$ramfolder" "$pocketram" 2>/dev/null || true
 
     if [ -f "$configfile" ]; then
         chown loxberry:loxberry "$configfile" 2>/dev/null || true
@@ -72,6 +71,33 @@ server_status() {
     fi
 }
 
+watchdog_start() {
+    [ -x "$watchdogctl" ] || return 0
+    if [ "$(id -u)" -eq 0 ]; then
+        runuser -u loxberry -- "$watchdogctl" start >> "$logfile" 2>&1 || return $?
+    else
+        "$watchdogctl" start >> "$logfile" 2>&1 || return $?
+    fi
+}
+
+watchdog_stop() {
+    [ -x "$watchdogctl" ] || return 0
+    if [ "$(id -u)" -eq 0 ]; then
+        runuser -u loxberry -- "$watchdogctl" stop >> "$logfile" 2>&1 || return $?
+    else
+        "$watchdogctl" stop >> "$logfile" 2>&1 || return $?
+    fi
+}
+
+watchdog_status() {
+    [ -x "$watchdogctl" ] || { echo "Pocket-TTS watchdog unavailable"; return 1; }
+    if [ "$(id -u)" -eq 0 ]; then
+        runuser -u loxberry -- "$watchdogctl" status
+    else
+        "$watchdogctl" status
+    fi
+}
+
 # LoxBerry historically invokes plugin daemon scripts without arguments, so an
 # empty action remains equivalent to "start". Explicit stop/restart/status are
 # handled correctly for service management and shutdown.
@@ -80,20 +106,30 @@ case "$action" in
     start)
         runtime_setup
         server_start
-        exit $?
+        server_rc=$?
+        watchdog_start || true
+        exit $server_rc
         ;;
     stop)
+        watchdog_stop || true
         server_stop
         exit $?
         ;;
     restart)
+        watchdog_stop || true
         server_stop || true
         runtime_setup
         server_start
-        exit $?
+        server_rc=$?
+        watchdog_start || true
+        exit $server_rc
         ;;
     status)
         server_status
+        server_rc=$?
+        watchdog_status
+        watchdog_rc=$?
+        [ "$server_rc" -eq 0 ] && [ "$watchdog_rc" -eq 0 ]
         exit $?
         ;;
     *)

@@ -84,6 +84,8 @@ TXT_SIPCMD_MSINFO="URL pour lire la valeur depuis le Miniserver :"
 TXT_BTN_BLOCK_CONFIG="Configuration"
 TXT_BTN_CONFIG_EXPORT="Export"
 TXT_BTN_CONFIG_IMPORT="Import"
+TXT_CONFIG_IMPORT_TITLE="Importer la configuration"
+TXT_CONFIG_IMPORT_CANCEL="Annuler"
 TXT_CONFIG_IMPORT_CONFIRM="Importing overwrites all current settings. Continue?"
 TXT_CONFIG_IMPORT_OK="The configuration has been imported."
 TXT_CONFIG_IMPORT_FAILED="The configuration could not be imported."
@@ -107,4 +109,12 @@ TXT_MQTT_CONNECTION_INVALID="Connexion MQTT echouee. Veuillez verifier Host/IP, 
 ; Pocket-TTS offline provider
 TXT_POCKETTTS_INSTALLING="Pocket-TTS : installation du modèle de langue …"
 TXT_POCKETTTS_READY="Pocket-TTS : le modèle de langue est prêt."
-TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS : impossible d’installer le modèle. La synthèse vocale hors ligne n’est pas disponible pour cette langue."
+TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS : impossible d’installer le modèle de langue. Veuillez vérifier l’espace disque disponible et la connexion Internet."
+
+; Pocket-TTS resident server watchdog
+TXT_POCKETTTS_SERVER_STATUS="Serveur Pocket-TTS en ligne :"
+TXT_POCKETTTS_SERVER_RESTART="Redémarrer le serveur"
+TXT_POCKETTTS_SERVER_RESTARTING="Redémarrage du serveur …"
+TXT_POCKETTTS_SERVER_RESTART_FAILED="Échec du redémarrage"
+TXT_POCKETTTS_SERVER_CHECKING="Vérification du statut …"
+TXT_EMPTY_LOG_DIALOG_AUTHENTICATE="Échec de l’authentification."

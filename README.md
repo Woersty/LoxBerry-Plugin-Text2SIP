@@ -24,10 +24,12 @@ Damit lassen sich Ereignisse aus **Loxone** oder anderen Systemen direkt als Tel
 * 🌐 Aufruf einer URL nach bzw. während eines Anrufs
 * ⏱️ Einstellbare Wartezeiten vor und nach der Ansage
 * ⌛ Einstellbares Anruf-Timeout
+* 📴 Lokale Offline-Sprachausgabe mit **Kyutai Pocket-TTS**
+* 🟢 Residenter Pocket-TTS-Server mit Watchdog und Statusanzeige
 * 🎙️ Integration des LoxBerry **Text2Speech** Plugins
 * 📡 Kommunikation mit Text2Speech über MQTT
 * 🌍 Nutzung eines Text2Speech Plugins auf einem anderen LoxBerry über einen externen MQTT-Broker möglich
-* 🔁 Fallback auf lokale Spracherzeugung, falls Text2Speech nicht verfügbar ist
+* 🔁 Fallback auf **Pocket-TTS**, falls Text2Speech nicht verfügbar ist
 * 📋 Umfangreiches Logging zur Fehlersuche
 * 🔄 Automatische Plugin-Updates über die LoxBerry Update-Funktion
 
@@ -66,8 +68,10 @@ Loxone / HTTP-Aufruf
         ├── Text erzeugen
         │
         ├── optional Text2Speech über MQTT
+        │       └── bei Fehler: Pocket-TTS
         │
-        ├── Audio-Datei erzeugen
+        ├── lokale Spracherzeugung: Pocket-TTS
+        ├── Audio-Datei im RAM erzeugen
         │
         ▼
       pjsua
@@ -82,6 +86,16 @@ Loxone / HTTP-Aufruf
 Seit Release **2026.08.10** verwendet Text2SIP für die SIP-Telefonie **pjsua**.
 
 Die früher verwendete `sipcmd`-Implementierung wurde ersetzt.
+
+### Offline-Sprachausgabe mit Pocket-TTS
+
+Wenn das Text2Speech-Plugin deaktiviert ist, erzeugt Text2SIP die Ansage lokal mit **Pocket-TTS 2.1.0**. Das aktuell gewählte Sprachmodell läuft als residenter lokaler Server und bleibt zwischen den Anrufen im Speicher. Dadurch muss das Modell nicht für jede Ansage neu geladen werden.
+
+Ein Watchdog prüft den lokalen Pocket-TTS-Server sofort nach dem Start und anschließend alle **120 Sekunden**. Laufzeitstatus und Fehlerprotokoll liegen ausschließlich unter `/run/shm/text2sip-pockettts/`. Das Watchdog-Fehlerlog wird bei mehr als **50 KiB** automatisch zurückgesetzt.
+
+Pocket-TTS-Sprachmodelle werden bei Bedarf über die vorhandene Sprachauswahl geladen. Text2SIP verwendet die kompakten Modelle für Deutsch, Englisch, Spanisch, Italienisch und Portugiesisch. Für Französisch steht in Pocket-TTS 2.1.0 nur `french_24l` zur Verfügung; dieses Modell wird als einzige 24L-Ausnahme ebenfalls nur bei Auswahl von Frankreich heruntergeladen. Es bleibt immer nur ein Sprachmodell gleichzeitig resident im RAM.
+
+In der Plugin-Oberfläche wird der Pocket-TTS-Status immer angezeigt, sobald **Text2SIP aktiviert** ist. Bei einem Fehler erscheint ein roter Statuspunkt und ein Button zum manuellen Neustart des residenten Servers.
 
 ---
 

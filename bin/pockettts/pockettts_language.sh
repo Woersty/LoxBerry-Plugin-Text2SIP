@@ -31,16 +31,22 @@ if [ "$action" != "install" ] && [ "$action" != "status" ]; then
 fi
 code="$(printf '%s' "$code" | tr '[:upper:]' '[:lower:]')"
 
+# Text2SIP prefers Pocket-TTS' compact/low layer variants. Pocket-TTS 2.1.0
+# provides French only as french_24l, so French is the one deliberate exception.
 case "$code" in
-    de) model="german";     voice="juergen";  warmtext="Test" ;;
-    gb|us|en) model="english";    voice="alba";     warmtext="Test" ;;
-    es) model="spanish";    voice="lola";     warmtext="Prueba" ;;
-    fr) model="french_24l"; voice="estelle";  warmtext="Test" ;;
-    it) model="italian";    voice="giovanni"; warmtext="Prova" ;;
-    *) log "<WARNING> Pocket-TTS: unsupported language code '$code'"; exit 2 ;;
+    de|de-de) canon="de"; model="german";     voice="juergen";  warmtext="Test" ;;
+    gb|us|en|en-gb|en-us) canon="en"; model="english"; voice="alba"; warmtext="Test" ;;
+    es|es-es) canon="es"; model="spanish";    voice="lola";     warmtext="Prueba" ;;
+    it|it-it) canon="it"; model="italian";    voice="giovanni"; warmtext="Prova" ;;
+    pt|pt-pt) canon="pt"; model="portuguese"; voice="rafael";   warmtext="Teste" ;;
+    fr|fr-fr) canon="fr"; model="french_24l"; voice="estelle"; warmtext="Bonjour" ;;
+    *)
+        log "<WARNING> Pocket-TTS: unsupported language code '$code'"
+        exit 2
+        ;;
 esac
 
-marker="$STATE/$code.ready"
+marker="$STATE/$canon.ready"
 
 if [ "$action" = "status" ]; then
     [ -f "$marker" ] && exit 0
@@ -48,7 +54,7 @@ if [ "$action" = "status" ]; then
 fi
 
 if [ -f "$marker" ] && [ -x "$CLI" ]; then
-    log "<OK> Pocket-TTS language already prepared: $code ($model/$voice)"
+    log "<OK> Pocket-TTS language already prepared: $canon ($model/$voice)"
     exit 0
 fi
 
@@ -57,7 +63,7 @@ if [ ! -x "$CLI" ]; then
     exit 3
 fi
 
-out="$TMPBASE/warmup-${code}-$$.wav"
+out="$TMPBASE/warmup-${canon}-$$.wav"
 rm -f "$out"
 
 export HF_HOME="$CACHE/huggingface"
@@ -65,12 +71,11 @@ export HUGGINGFACE_HUB_CACHE="$CACHE/huggingface/hub"
 export XDG_CACHE_HOME="$CACHE/xdg"
 export TORCH_HOME="$CACHE/torch"
 export TMPDIR="$TMPBASE"
+export LC_ALL="C.UTF-8"
+export LANG="C.UTF-8"
 
-log "<INFO> Pocket-TTS: preparing language=$code model=$model voice=$voice"
+log "<INFO> Pocket-TTS: preparing language=$canon model=$model voice=$voice"
 
-# Keep stdout quiet in normal CGI mode. POSTROOT can request one concise status
-# line, but Pocket-TTS/HuggingFace's very verbose package/model progress is kept
-# out of the LoxBerry installer log.
 if "$CLI" generate \
     --language "$model" \
     --voice "$voice" \
@@ -86,10 +91,10 @@ if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
     : > "$marker"
     chmod 664 "$marker" 2>/dev/null || true
     rm -f "$out"
-    log "<OK> Pocket-TTS language ready: $code ($model/$voice)"
+    log "<OK> Pocket-TTS language ready: $canon ($model/$voice)"
     exit 0
 fi
 
 rm -f "$out"
-log "<ERROR> Pocket-TTS language preparation failed: $code ($model/$voice), exit=$rc"
+log "<ERROR> Pocket-TTS language preparation failed: $canon ($model/$voice), exit=$rc"
 exit 4

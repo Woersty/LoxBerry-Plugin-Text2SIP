@@ -19,14 +19,10 @@ ini_set("log_errors", 1);
 $psubdir       = array_pop(array_filter(explode('/', pathinfo($_SERVER["SCRIPT_FILENAME"], PATHINFO_DIRNAME))));
 $mydir         = pathinfo($_SERVER["SCRIPT_FILENAME"], PATHINFO_DIRNAME);
 $pluginlogfile = $lbplogdir . "/Text2SIP.log";
-$sipcmdlogfile = $lbplogdir . "/Text2SIP.log";
 
-$plugindatadir      = $mydir . "/../../../../data/plugins/$psubdir/wav";
 $plugincfgfile      = $mydir . "/../../../../config/plugins/$psubdir/Text2SIP.cfg";
 $pluginlanguagefile = $mydir . "/../../../../templates/plugins/$psubdir/de/language.dat";
 
-$sipcmd        = $mydir . "/../../../../webfrontend/htmlauth/plugins/$psubdir/bin/sipcmd";
-$option_o      = ""; // Heavy sipcmd Debug (legacy)
 
 $plugin_phrase_array = @parse_ini_file("$pluginlanguagefile");
 $plugin_cfg_array    = @parse_ini_file("$plugincfgfile");

@@ -67,6 +67,7 @@ CONFIG_DIR="$LBHOMEDIR/config/plugins/$PDIR"
 POCKET_DATA="$LBHOMEDIR/data/plugins/$PDIR/pockettts"
 POCKET_OLD="$LBHOMEDIR/bin/plugins/$PDIR/pockettts"
 POCKET_SERVER_CTL="$LBHOMEDIR/bin/plugins/$PDIR/pockettts/pockettts_server.sh"
+POCKET_WATCHDOG_CTL="$LBHOMEDIR/bin/plugins/$PDIR/pockettts/pockettts_watchdog.sh"
 
 # Same persistent sibling strategy as Sonos4Lox: the large/generated payload
 # is moved outside data/plugins/$PDIR while LoxBerry replaces the plugin tree.
@@ -76,8 +77,12 @@ POCKET_BACKUP="$PERSISTENT_UPGRADE_DIR/pockettts"
 
 cleanup_stale_upgrade_dirs
 
-# Stop the resident server before moving its venv/model tree. This keeps upgrades
-# deterministic and ensures POSTROOT starts a fresh process from the restored runtime.
+# Stop watchdog first so it cannot restart the resident server while the venv/model
+# tree is being moved. Then stop the server itself. POSTROOT starts both again.
+if [ -x "$POCKET_WATCHDOG_CTL" ]; then
+    log_info "Stopping Pocket-TTS watchdog for upgrade"
+    "$POCKET_WATCHDOG_CTL" stop >/dev/null 2>&1 || log_warning "Pocket-TTS watchdog stop returned an error; continuing upgrade"
+fi
 if [ -x "$POCKET_SERVER_CTL" ]; then
     log_info "Stopping resident Pocket-TTS server for upgrade"
     "$POCKET_SERVER_CTL" stop >/dev/null 2>&1 || log_warning "Pocket-TTS server stop returned an error; continuing upgrade"

@@ -119,20 +119,21 @@ $pluginconfigfile = "$pluginconfigdir/Text2SIP.cfg";
 
 # Plugin-Dirs anlegen (falls nicht vorhanden)
 make_path("$installfolder/log/plugins/$psubfolder")      unless -d "$installfolder/log/plugins/$psubfolder";
-make_path("$installfolder/data/plugins/$psubfolder/wav") unless -d "$installfolder/data/plugins/$psubfolder/wav";
-make_path("$installfolder/tmp/plugins/$psubfolder")      unless -d "$installfolder/tmp/plugins/$psubfolder";
 make_path("/run/shm/text2sip")                            unless -d "/run/shm/text2sip";
 
 # Binaries/Verzeichnisse
 $pluginbindir  = "$installfolder/webfrontend/htmlauth/plugins/$psubfolder/bin";
 $plugindatadir = "/run/shm/text2sip";  # transient call audio/job files in RAM (tmpfs)
-$plugintmpfile = "$installfolder/tmp/plugins/$psubfolder";
 our $pockettts_base    = "$installfolder/bin/plugins/$psubfolder/pockettts";
 our $pockettts_runtime = "$installfolder/data/plugins/$psubfolder/pockettts";
 our $pockettts_cli     = "$pockettts_runtime/venv/bin/pocket-tts";
 our $pockettts_helper     = "$pockettts_base/pockettts_language.sh";
 our $pockettts_server_ctl = "$pockettts_base/pockettts_server.sh";
+our $pockettts_watchdog_ctl = "$pockettts_base/pockettts_watchdog.sh";
 our $pockettts_server_url = "http://127.0.0.1:8765";
+our $pockettts_watchdog_status_file = "/run/shm/text2sip-pockettts/watchdog.status";
+our $pockettts_watchdog_pid_file = "/run/shm/text2sip-pockettts/watchdog.pid";
+our $pockettts_server_model_file = "/run/shm/text2sip-pockettts/server.model";
 
 # Kodier-Helfer. Config::Simple, Backticks und die Kommandozeile arbeiten mit
 # UTF-8-Bytes; CGI (-utf8) und die Sprachdateien liefern Zeichen. as_chars()
@@ -154,28 +155,45 @@ sub as_bytes {
     return utf8::is_utf8($v) ? encode_utf8($v) : $v;
 }
 
-# Pocket-TTS mapping. Keep the existing UI country codes/config format so no
-# migration is required. The distilled models are preferred on LoxBerry CPUs;
-# French currently has only the 24-layer multilingual release model.
+# Pocket-TTS mapping. Text2SIP uses the compact/low variants where available.
+# Pocket-TTS 2.1.0 provides French only as french_24l; French is therefore the
+# one deliberate exception and is still downloaded only on demand.
 sub pockettts_language_config {
     my ($lang) = @_;
     $lang = lc($lang // 'de');
 
     my %map = (
-        'de'    => ['de', 'german',     'juergen'],
-        'de-de' => ['de', 'german',     'juergen'],
-        'gb'    => ['gb', 'english',    'alba'],
-        'en-gb' => ['gb', 'english',    'alba'],
-        'us'    => ['us', 'english',    'alba'],
-        'en-us' => ['us', 'english',    'alba'],
-        'es'    => ['es', 'spanish',    'lola'],
-        'es-es' => ['es', 'spanish',    'lola'],
-        'fr'    => ['fr', 'french_24l', 'estelle'],
-        'fr-fr' => ['fr', 'french_24l', 'estelle'],
-        'it'    => ['it', 'italian',    'giovanni'],
-        'it-it' => ['it', 'italian',    'giovanni'],
+        'de'    => ['de', 'de', 'german',     'juergen'],
+        'de-de' => ['de', 'de', 'german',     'juergen'],
+        'gb'    => ['gb', 'en', 'english',    'alba'],
+        'en-gb' => ['gb', 'en', 'english',    'alba'],
+        'us'    => ['us', 'en', 'english',    'alba'],
+        'en-us' => ['us', 'en', 'english',    'alba'],
+        'es'    => ['es', 'es', 'spanish',    'lola'],
+        'es-es' => ['es', 'es', 'spanish',    'lola'],
+        'it'    => ['it', 'it', 'italian',    'giovanni'],
+        'it-it' => ['it', 'it', 'italian',    'giovanni'],
+        'pt'    => ['pt', 'pt', 'portuguese', 'rafael'],
+        'pt-pt' => ['pt', 'pt', 'portuguese', 'rafael'],
+        'fr'    => ['fr', 'fr', 'french_24l', 'estelle'],
+        'fr-fr' => ['fr', 'fr', 'french_24l', 'estelle'],
     );
     return $map{$lang} || $map{'de'};
+}
+
+sub pockettts_language_ready {
+    my ($canon) = @_;
+    return 0 unless defined $canon && $canon =~ /^(?:de|en|es|it|pt|fr)$/;
+    return -f "$pockettts_runtime/languages/$canon.ready" ? 1 : 0;
+}
+
+sub pockettts_current_server_model {
+    return '' unless -r $pockettts_server_model_file;
+    open my $fh, '<', $pockettts_server_model_file or return '';
+    my $model = <$fh> // '';
+    close $fh;
+    chomp $model;
+    return $model =~ /^(?:german|english|spanish|italian|portuguese|french_24l)$/ ? $model : '';
 }
 
 # application/x-www-form-urlencoded encoder for Pocket-TTS' local FastAPI /tts
@@ -195,19 +213,96 @@ sub pockettts_server_healthy {
 }
 
 sub pockettts_server_start_and_wait {
-    return 1 if pockettts_server_healthy();
+    my ($model) = @_;
+    return 0 unless defined $model && $model =~ /^(?:german|english|spanish|italian|portuguese|french_24l)$/;
     return 0 unless -x $pockettts_server_ctl;
 
-    # CGI runs as loxberry, so the controller can launch the detached process
-    # directly. Avoid starting the CLI model in parallel while the server loads.
-    system($pockettts_server_ctl, 'start');
+    if (pockettts_server_healthy() && pockettts_current_server_model() eq $model) {
+        return 1;
+    }
 
-    my $deadline = time() + 20.0;
+    # start/ensure is idempotent: if another compact language is resident, the
+    # controller replaces it; if the requested model is already loading it does
+    # not start a second copy.
+    system($pockettts_server_ctl, 'ensure', $model);
+
+    my $deadline = time() + 45.0;
     while (time() < $deadline) {
-        return 1 if pockettts_server_healthy();
+        if (pockettts_server_healthy() && pockettts_current_server_model() eq $model) {
+            return 1;
+        }
         select(undef, undef, undef, 0.25);
     }
     return 0;
+}
+
+# The UI never probes Pocket-TTS directly. It reads the small status file that
+# is refreshed by pockettts_watchdog.sh every two minutes. A green state is
+# accepted only while the watchdog itself is alive and the status is <=5 min old.
+
+sub pockettts_watchdog_pid_alive {
+    return 0 unless -r $pockettts_watchdog_pid_file;
+    open my $pf, '<', $pockettts_watchdog_pid_file or return 0;
+    my $pid = <$pf> // '';
+    close $pf;
+    chomp $pid;
+    return 0 unless $pid =~ /^\d+$/;
+    return 0 unless kill(0, int($pid));
+
+    my $cmdline = '';
+    if (open my $cf, '<:raw', "/proc/$pid/cmdline") {
+        local $/;
+        $cmdline = <$cf> // '';
+        close $cf;
+        $cmdline =~ s/\0/ /g;
+    }
+    return ($cmdline =~ /pockettts_watchdog\.sh/i && $cmdline =~ /\brun\b/) ? 1 : 0;
+}
+
+sub pockettts_watchdog_read_status {
+    my %st = ( state => 'offline', checked => 0, detail => 'missing', age => 999999, watchdog => 0 );
+    $st{watchdog} = pockettts_watchdog_pid_alive() ? 1 : 0;
+
+    if (-r $pockettts_watchdog_status_file) {
+        if (open my $fh, '<', $pockettts_watchdog_status_file) {
+            while (my $line = <$fh>) {
+                chomp $line;
+                my ($k, $v) = split(/=/, $line, 2);
+                next unless defined $k && defined $v;
+                $st{$k} = $v if $k eq 'state' || $k eq 'checked' || $k eq 'detail';
+            }
+            close $fh;
+        }
+    }
+
+    $st{checked} = 0 unless defined $st{checked} && $st{checked} =~ /^\d+$/;
+    my $now = int(time());
+    $st{age} = $st{checked} > 0 ? ($now - $st{checked}) : 999999;
+    $st{age} = 0 if $st{age} < 0;
+
+    # A stale/missing watchdog can never leave a permanent green indicator.
+    if (!$st{watchdog} || $st{age} > 300 || ($st{state} // '') ne 'online') {
+        $st{state} = 'offline';
+    } else {
+        $st{state} = 'online';
+    }
+    return \%st;
+}
+
+sub pockettts_watchdog_write_status {
+    my ($state, $detail) = @_;
+    $state  = ($state && $state eq 'online') ? 'online' : 'offline';
+    $detail = defined $detail ? $detail : '';
+    $detail =~ s/[\r\n]/ /g;
+    make_path('/run/shm/text2sip-pockettts') unless -d '/run/shm/text2sip-pockettts';
+    my $tmp = $pockettts_watchdog_status_file . '.cgi.' . $$;
+    if (open my $fh, '>', $tmp) {
+        print $fh "state=$state\n";
+        print $fh "checked=" . int(time()) . "\n";
+        print $fh "detail=$detail\n";
+        close $fh;
+        rename $tmp, $pockettts_watchdog_status_file;
+    }
 }
 
 # MQTT 3.1.1 Hilfsfunktionen fuer die Validierung eines externen Brokers.
@@ -330,7 +425,7 @@ sub get_temp_filename {
 }
 
 $pluginjobfile = get_temp_filename('.job.tsp');
-$pluginwavfile = get_temp_filename('_wav');
+$pluginwavfile = get_temp_filename('.wav');
 $plugintmpfile = get_temp_filename('.tmp.wav');
 
 # Plugin-Config laden
@@ -590,6 +685,7 @@ if ($do eq "makecall")
     elsif ($P2W_lang eq "es" ) { $P2W_lang = "es-ES"; $unknown = "desconocido" }
     elsif ($P2W_lang eq "fr" ) { $P2W_lang = "fr-FR"; $unknown = "inconnu" }
     elsif ($P2W_lang eq "it" ) { $P2W_lang = "it-IT"; $unknown = "sconosciuto" }
+    elsif ($P2W_lang eq "pt" ) { $P2W_lang = "pt-PT"; $unknown = "desconhecido" }
     elsif ($P2W_lang eq "de" ) { $P2W_lang = "de-DE"; $unknown = "unbekannt" }
     else {
         LOGERR "Error: Unknown language $P2W_lang - using german instead ";
@@ -733,13 +829,9 @@ if ($do eq "makecall")
     #************************** End TTS routing (CONFIG-ONLY) ***************************
 
     # No third offline fallback exists anymore. If neither Text2Speech nor
-    # Pocket-TTS produced audio, abort before creating a SIP job instead of
-    # starting pjsua with a missing/empty file.
-    my $tts_wav_candidate = $pluginwavfile;
-    $tts_wav_candidate =~ s/_wav$/.wav/i;
-    my $tts_audio_ok =
-        (-e $pluginwavfile && -s $pluginwavfile > 0) ||
-        (-e $tts_wav_candidate && -s $tts_wav_candidate > 0);
+    # Pocket-TTS produced a usable WAV, abort before creating a SIP job instead
+    # of starting pjsua with a missing/empty file.
+    my $tts_audio_ok = (-e $pluginwavfile && -s $pluginwavfile > 0);
     if (!$tts_audio_ok) {
         my $m = "## ERROR: No usable TTS audio produced; call aborted";
         if (open my $lf, '>>:encoding(UTF-8)', "$lbplogdir/$logfile") {
@@ -751,7 +843,6 @@ if ($do eq "makecall")
             . ($phraseplugin->param('TXT_JOB_QUEUED_FAIL') // 'Call failed')
             . "</span>\n<br/>TTS\n";
         unlink $pluginwavfile if -e $pluginwavfile;
-        unlink $tts_wav_candidate if -e $tts_wav_candidate;
         unlink $plugintmpfile if -e $plugintmpfile;
         exit;
     }
@@ -784,12 +875,8 @@ if ($do eq "makecall")
     my $drv_debug = (defined $DEBUG_USE && $DEBUG_USE eq 'on') ? 1 : 0;
     my $disp      = defined $SIPCMD_CALLING_USER_NAME ? $SIPCMD_CALLING_USER_NAME : '';
 
-    # Die TTS-Kette erzeugt zwei Dateien: eine echte RIFF/WAVE ($wav_path, .wav)
-    # und ein headerloses RAW-s16le ($pluginwavfile, _wav) fuer sipcmds v-Kommando.
-    # pjsua braucht die echte WAV -> aus dem _wav-Namen ableiten.
+    # Die TTS-Kette erzeugt direkt die RIFF/WAVE-Datei, die pjsua abspielt.
     my $wav_for_pjsua = $pluginwavfile;
-    $wav_for_pjsua =~ s/_wav$/.wav/i;
-    $wav_for_pjsua = $pluginwavfile unless -e $wav_for_pjsua;  # Fallback (Diagnose im Log)
 
     # Argumente einzeln quoten. Das Passwort landet ausschliesslich im Jobfile
     # (fuer die Ausfuehrung noetig), NICHT im lesbaren Text2SIP.log.
@@ -827,7 +914,7 @@ if ($do eq "makecall")
         print $jf "echo \"################################ Start job from $pluginjobfile @ \$(date)\" >> $qlog\n";
         print $jf "chmod +x " . shell_quote($pjsua_bin) . " 2>/dev/null\n";
         print $jf $cmd . "\n";
-        print $jf "rm -f " . shell_quote($pluginwavfile) . " " . shell_quote($wav_for_pjsua) . " " . shell_quote($plugintmpfile) . " 2>/dev/null\n";
+        print $jf "rm -f " . shell_quote($pluginwavfile) . " " . shell_quote($plugintmpfile) . " 2>/dev/null\n";
         print $jf "echo \"################################ End job from $pluginjobfile\" >> $qlog\n";
         close $jf;
     } else {
@@ -893,26 +980,108 @@ elsif ($do eq "pockettts_install_language")
 
     my $requested = lc(param('lang') // '');
     $requested =~ s/[^a-z]//g;
-    my %allowed = map { $_ => 1 } qw(de gb us es fr it);
+    my %allowed = map { $_ => 1 } qw(de gb us es fr it pt);
 
     if (!$allowed{$requested}) {
         print encode_json({ ok => 0, code => $requested, error => 'unsupported_language' });
         exit;
     }
 
+    my $cfg = pockettts_language_config($requested);
+    if (!$cfg) {
+        print encode_json({ ok => 0, code => $requested, error => 'unsupported_language' });
+        exit;
+    }
+    my ($ui_code, $canon, $model, $voice) = @$cfg;
+
     if (!-x $pockettts_helper) {
         print encode_json({ ok => 0, code => $requested, error => 'installer_missing' });
         exit;
     }
 
-    # The helper writes all child output to the plugin log, keeping this response valid JSON.
+    # The helper checks the canonical marker first, so US/UK share one English
+    # model and existing models return immediately without network access.
     my $rc = system($pockettts_helper, 'install', $requested);
     my $exit_code = ($rc == -1) ? 255 : ($rc >> 8);
+    my $server_ok = 0;
+
+    if ($exit_code == 0) {
+        $server_ok = pockettts_server_start_and_wait($model) ? 1 : 0;
+    }
 
     print encode_json({
-        ok   => ($exit_code == 0 ? 1 : 0),
-        code => $requested,
-        exit => $exit_code,
+        ok        => ($exit_code == 0 ? 1 : 0),
+        code      => $requested,
+        canonical => $canon,
+        model     => $model,
+        ready     => pockettts_language_ready($canon) ? 1 : 0,
+        resident  => $server_ok,
+        exit      => $exit_code,
+    });
+    exit;
+}
+
+#--------------- Pocket-TTS watchdog status ---------------
+elsif ($do eq "pockettts_watchdog_status")
+{
+    print header(-type => 'application/json', -charset => 'UTF-8');
+
+    my $st = pockettts_watchdog_read_status();
+    print encode_json({
+        ok       => 1,
+        visible  => 1,
+        state    => $st->{state},
+        checked  => int($st->{checked} || 0),
+        age      => int($st->{age} || 0),
+        watchdog => $st->{watchdog} ? 1 : 0,
+    });
+    exit;
+}
+
+#--------------- Pocket-TTS manual restart ---------------
+elsif ($do eq "pockettts_restart_server")
+{
+    print header(-type => 'application/json', -charset => 'UTF-8');
+
+    unless (-x $pockettts_server_ctl && -x $pockettts_watchdog_ctl) {
+        pockettts_watchdog_write_status('offline', 'controller_missing');
+        print encode_json({ ok => 0, visible => 1, state => 'offline', error => 'controller_missing' });
+        exit;
+    }
+
+    # Pause the watchdog during an explicit UI restart so it cannot race the
+    # user's request. The watchdog is started again in all cases below.
+    system($pockettts_watchdog_ctl, 'stop') if -x $pockettts_watchdog_ctl;
+    pockettts_watchdog_write_status('offline', 'manual_restart');
+
+    my $rc = system($pockettts_server_ctl, 'restart');
+    my $exit_code = ($rc == -1) ? 255 : ($rc >> 8);
+    my $healthy = 0;
+
+    if ($exit_code == 0) {
+        my $deadline = time() + 50.0;
+        while (time() < $deadline) {
+            if (pockettts_server_healthy()) {
+                $healthy = 1;
+                last;
+            }
+            select(undef, undef, undef, 0.5);
+        }
+    }
+
+    if ($healthy) {
+        pockettts_watchdog_write_status('online', 'manual_restart_ok');
+    } else {
+        pockettts_watchdog_write_status('offline', 'manual_restart_failed');
+    }
+
+    system($pockettts_watchdog_ctl, 'start') if -x $pockettts_watchdog_ctl;
+
+    print encode_json({
+        ok      => $healthy ? 1 : 0,
+        visible => 1,
+        state   => $healthy ? 'online' : 'offline',
+        exit    => $exit_code,
     });
     exit;
 }
@@ -1078,7 +1247,7 @@ elsif ($do eq "config_import")
         else
         { 
           $P2W_lang                       = "".param('P2W_lang'.$i                      );
-          if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
+          if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" && $P2W_lang ne "it" && $P2W_lang ne "pt" ) {$P2W_lang = "de"};
           $P2W_Text                       = "".param('P2W_Text'.$i                      );
           if ($P2W_Text eq "" ) 
           {
@@ -1298,7 +1467,7 @@ elsif ($do eq "config_import")
             {
                next; 
             }
-            if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" &&  $P2W_lang ne "it" ) {$P2W_lang = "de"};
+            if ($P2W_lang ne "gb" && $P2W_lang ne "us" && $P2W_lang ne "es" && $P2W_lang ne "fr" && $P2W_lang ne "it" && $P2W_lang ne "pt" ) {$P2W_lang = "de"};
             $P2W_Text                       =  as_chars($plugin_cfg->param('default.P2W_Text'.$vg_id                          ));
             $SIPCMD_CALLING_USER_NUMBER     =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_NUMBER'.$vg_id        ));
             $SIPCMD_CALLING_USER_PASSWORD   =  as_chars($plugin_cfg->param('default.SIPCMD_CALLING_USER_PASSWORD'.$vg_id      ));
@@ -1656,7 +1825,27 @@ sub usepockettts
         return 0;
     }
 
-    my ($ui_code, $model, $voice) = @{ pockettts_language_config($P2W_lang) };
+    my $lang_cfg = pockettts_language_config($P2W_lang);
+    if (!$lang_cfg) {
+        $log->("## ERROR: Pocket-TTS model unavailable for lang=$P2W_lang");
+        return 0;
+    }
+    my ($ui_code, $canon, $model, $voice) = @$lang_cfg;
+
+    if (!pockettts_language_ready($canon)) {
+        if (!-x $pockettts_helper) {
+            $log->("## ERROR: Pocket-TTS language helper unavailable: $pockettts_helper");
+            return 0;
+        }
+        $log->("## Pocket-TTS model missing for $canon ($model); preparing on demand");
+        my $prep_rc = system($pockettts_helper, 'install', $ui_code);
+        my $prep_exit = ($prep_rc == -1) ? 255 : ($prep_rc >> 8);
+        if ($prep_exit != 0 || !pockettts_language_ready($canon)) {
+            $log->("## ERROR: Pocket-TTS model preparation failed for $canon ($model), exit=$prep_exit");
+            return 0;
+        }
+    }
+
     my $pre_ms = 100;
     my $af = "adelay=${pre_ms}|${pre_ms},volume=0.9";
 
@@ -1681,10 +1870,10 @@ sub usepockettts
     my $route = 'cli';
     my $started = time();
 
-    # Stage 8 fast path: keep the German model resident in memory and use the
-    # official local /tts HTTP API. Other languages keep the existing CLI path
-    # for now so only one model occupies RAM permanently.
-    if ($model eq 'german' && pockettts_server_start_and_wait()) {
+    # Keep exactly the selected compact language model resident and use the
+    # official local /tts HTTP API. If switching/loading the resident model
+    # fails, fall back to the CLI with the same compact model.
+    if (pockettts_server_start_and_wait($model)) {
         my $wget = ($wgetbin && -x $wgetbin) ? $wgetbin : '/usr/bin/wget';
         my $post = 'text=' . pockettts_form_escape($P2W_Text)
                  . '&voice_url=' . pockettts_form_escape($voice);
@@ -1721,11 +1910,7 @@ sub usepockettts
         return 0;
     }
 
-    my ($wav_path, $raw_path);
-    if    ($pluginwavfile =~ /_wav$/i){ ($wav_path=$pluginwavfile)=~s/_wav$/.wav/i; $raw_path=$pluginwavfile; }
-    elsif ($pluginwavfile =~ /\.wav$/i){ $wav_path=$pluginwavfile; ($raw_path=$pluginwavfile)=~s/\.wav$/_wav/i; }
-    else { $wav_path=$pluginwavfile.'.wav'; $raw_path=$pluginwavfile.'_wav'; }
-
+    my $wav_path = $pluginwavfile;
     unlink $wav_path;
     my @ff_wav = (
         $ff, '-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
@@ -1744,30 +1929,12 @@ sub usepockettts
         return 0;
     }
 
-    unlink $raw_path;
-    my @ff_raw = (
-        $ff, '-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
-        '-i', $source_wav,
-        '-filter:a', $af,
-        '-ac', '1', '-ar', '8000', '-acodec', 'pcm_s16le', '-f', 's16le',
-        $raw_path
-    );
-    my $rc2 = system(@ff_raw);
-    my $sz_raw = (-e $raw_path) ? (-s $raw_path) : 0;
     unlink $source_wav;
-    $log->("## Pocket-TTS ffmpeg RAW exit=".($rc2 >> 8)." size=${sz_raw}B");
-    if ($rc2 != 0 || $sz_raw <= 0) {
-        unlink $wav_path;
-        unlink $raw_path;
-        $log->("## ERROR: Pocket-TTS RAW conversion failed");
-        return 0;
-    }
 
     my $audio_bytes = $sz_wav > 44 ? ($sz_wav - 44) : $sz_wav;
     my $dur_wav = sprintf('%.2f', $audio_bytes / 16000.0);
-    my $dur_raw = sprintf('%.2f', $sz_raw / 16000.0);
-    $log->("## Pocket-TTS DUR wav=${dur_wav}s raw=${dur_raw}s");
-    $log->("## usepockettts OK -> wav=$wav_path raw=$raw_path");
+    $log->("## Pocket-TTS DUR wav=${dur_wav}s");
+    $log->("## usepockettts OK -> wav=$wav_path");
     $log->("## ROUTE: Pocket-TTS completed via $route");
     job_log_end();
     return 1;

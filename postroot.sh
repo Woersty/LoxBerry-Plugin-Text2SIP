@@ -150,6 +150,7 @@ POCKET_VENV="$POCKET_DATA/venv"
 POCKET_CLI="$POCKET_VENV/bin/pocket-tts"
 POCKET_HELPER="$POCKET_CODE/pockettts_language.sh"
 POCKET_SERVER_CTL="$POCKET_CODE/pockettts_server.sh"
+POCKET_WATCHDOG_CTL="$POCKET_CODE/pockettts_watchdog.sh"
 POCKET_CACHE="$POCKET_DATA/cache"
 POCKET_STATE="$POCKET_DATA/languages"
 
@@ -158,7 +159,7 @@ mkdir -p "$POCKET_CACHE" "$POCKET_STATE" /run/shm/text2sip-pockettts 2>/dev/null
 chown -R loxberry:loxberry "$POCKET_DATA" /run/shm/text2sip-pockettts 2>/dev/null || true
 chmod 775 "$POCKET_DATA" "$POCKET_CACHE" "$POCKET_STATE" /run/shm/text2sip-pockettts 2>/dev/null || true
 
-for POCKET_SCRIPT in "$POCKET_HELPER" "$POCKET_SERVER_CTL"; do
+for POCKET_SCRIPT in "$POCKET_HELPER" "$POCKET_SERVER_CTL" "$POCKET_WATCHDOG_CTL"; do
     if [ -f "$POCKET_SCRIPT" ]; then
         chown root:loxberry "$POCKET_SCRIPT" 2>/dev/null || true
         chmod 755 "$POCKET_SCRIPT" 2>/dev/null || true
@@ -206,20 +207,31 @@ if [ -x "$PYTHON_BIN" ]; then
             fi
 
             # Install the CPU build first so x86 installations do not pull CUDA
-            # runtime packages from the default PyPI index.
+            # runtime packages from the default PyPI index. If this step fails,
+            # do NOT continue with Pocket-TTS: its normal dependency resolution
+            # could otherwise pull a regular/GPU PyTorch build and NVIDIA/CUDA
+            # packages from PyPI.
+            CPU_TORCH_READY=0
             if run_progress "Installing CPU PyTorch for Pocket-TTS" \
                 "$POCKET_VENV/bin/python" -m pip install --disable-pip-version-check \
                 --index-url https://download.pytorch.org/whl/cpu 'torch>=2.5.0'; then
-                log_ok "CPU PyTorch is ready"
+                if "$POCKET_VENV/bin/python" -c 'import torch' >/dev/null 2>&1; then
+                    CPU_TORCH_READY=1
+                    log_ok "CPU PyTorch is ready"
+                else
+                    log_error "CPU PyTorch was installed but cannot be imported; Pocket-TTS package installation skipped"
+                fi
             else
-                log_warning "CPU PyTorch installation/check failed"
+                log_error "CPU PyTorch installation failed; Pocket-TTS package installation skipped"
             fi
 
-            if run_progress "Installing Pocket-TTS 2.1.0 and dependencies" \
-                "$POCKET_VENV/bin/python" -m pip install --disable-pip-version-check 'pocket-tts==2.1.0'; then
-                log_ok "Pocket-TTS 2.1.0 is installed"
-            else
-                log_warning "Pocket-TTS package installation failed"
+            if [ "$CPU_TORCH_READY" -eq 1 ]; then
+                if run_progress "Installing Pocket-TTS 2.1.0 and dependencies" \
+                    "$POCKET_VENV/bin/python" -m pip install --disable-pip-version-check 'pocket-tts==2.1.0'; then
+                    log_ok "Pocket-TTS 2.1.0 is installed"
+                else
+                    log_warning "Pocket-TTS package installation failed"
+                fi
             fi
         fi
     fi
@@ -464,10 +476,13 @@ else
     log_warning "Text2SIP daemon script not found: $daemon_script"
 fi
 
-# Stage 8: the daemon starts Pocket-TTS detached. During installation we wait
-# once for the model to become healthy and issue a tiny request so the German
-# juergen voice state is cached before the first real phone announcement.
+# Keep installation deterministic: German is the mandatory base model and is
+# always made resident after install/upgrade. Runtime/UI language selections can
+# switch the single resident compact model later. This also avoids warming the
+# German voice against a different model that happened to be resident before an
+# upgrade.
 if [ -x "$POCKET_SERVER_CTL" ] && [ -f "$POCKET_STATE/de.ready" ]; then
+    runuser -u loxberry -- "$POCKET_SERVER_CTL" ensure german >/dev/null 2>&1 || true
     log_info "Waiting for resident German Pocket-TTS server ..."
     POCKET_SERVER_READY=0
     POCKET_WAIT=0
@@ -493,6 +508,13 @@ if [ -x "$POCKET_SERVER_CTL" ] && [ -f "$POCKET_STATE/de.ready" ]; then
             log_ok "Resident Pocket-TTS voice 'juergen' is warm"
         else
             log_warning "Pocket-TTS voice warm-up failed; normal server/CLI fallback remains available"
+        fi
+
+        # Refresh the RAM status once after installation/warm-up so the UI can
+        # show a current green state immediately instead of waiting for the next
+        # two-minute watchdog interval.
+        if [ -x "$POCKET_WATCHDOG_CTL" ]; then
+            runuser -u loxberry -- "$POCKET_WATCHDOG_CTL" check >/dev/null 2>&1 || true
         fi
     else
         log_warning "Resident Pocket-TTS server did not become ready within 45 seconds; CLI fallback remains available"

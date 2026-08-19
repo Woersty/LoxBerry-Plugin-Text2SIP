@@ -15,3 +15,15 @@ Changelog:
 2026.08.10		Die alte sipcmd wurde durch pjsua ersetzt
 				Die MQTT Bridge Funktion wurde entfernt
 				MQTT Details wurden hinzugefügt (Text2speech Plugin kann auch auf einem anderen LB installiert sein)
+2026.08.18		Pocket-TTS als lokaler Offline-TTS-Provider integriert
+				Residenter Pocket-TTS-Server mit RAM-basierten Laufzeitdateien
+				Watchdog mit 120-Sekunden-Healthcheck und automatischem Recovery
+				Pocket-TTS-Status und manueller Server-Neustart in der UI
+				Pico2wave/SoX/RAW-Audio-Pfade entfernt und Installation verschlankt
+				Statusanzeige in den Konfigurationsblock verschoben und bei aktivem Plugin dauerhaft sichtbar
+				On-Demand-Sprachmodelle und residenter Sprachwechsel fuer DE/EN/ES/IT/PT (Low-Varianten)
+				Portugal zur Sprachauswahl hinzugefuegt
+				Franzoesisch on demand ueber french_24l/estelle ergaenzt (einzige 24L-Ausnahme)
+				CPU-PyTorch-Fehlerpfad abgesichert: bei Fehlschlag kein weiterer Pocket-TTS/CUDA-Dependency-Installationsversuch
+				Generische UI-Fehlermeldung fuer fehlgeschlagene Sprachmodell-Installationen aller Pocket-TTS-Sprachen
+				Native Browser-Dialoge beim Konfigurationsimport durch LoxBerry/jQuery-UI-Modals ersetzt
