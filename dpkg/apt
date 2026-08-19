@@ -1,9 +1,0 @@
-curl
-task-spooler
-ffmpeg
-sox
-alsa-utils
-wget
-avahi-daemon
-avahi-utils
-libnss-mdns

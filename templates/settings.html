@@ -3,7 +3,7 @@
 				  <div id="dialog"></div>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/jquery-ui-1.9.2.custom.min.js"></script>
                   <script type="text/javascript" src="/plugins/<!--$psubfolder-->/countrySelect.min.js"></script>
-                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css?v=20260810-v23">
+                  <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/style.css?v=20260810-v25">
                   <link   type="text/css" rel="stylesheet" href="/plugins/<!--$psubfolder-->/countrySelect.min.css">
                   <center>
                     <form autocomplete="off" method="post" data-ajax="false" name="main_form" id="main_form" action="./index.cgi">
@@ -48,6 +48,7 @@
                               </div>
                             </div>
                           </div>
+
                         </div>
 
                         <div class="t2sip-panel t2sip-panel-mqtt">
@@ -101,6 +102,14 @@
                               <a style="width:130px;" id="btncfgexport" data-icon="arrow-d" data-role="button" data-mini="true" target="_self" href="./index.cgi?do=config_export"><!--$TXT_BTN_CONFIG_EXPORT--></a>
                               <a style="width:130px;" id="btncfgimport" data-icon="arrow-u" data-role="button" data-mini="true" onclick="$('#cfgimportfile').click(); return false;"><!--$TXT_BTN_CONFIG_IMPORT--></a>
                               <input type="file" id="cfgimportfile" accept=".cfg,.txt" data-role="none" style="display:none;" onchange="ConfigImport(this);">
+                              <div id="pockettts-server-status" class="pockettts-server-status" role="status" aria-live="polite">
+                                <div class="pockettts-status-line">
+                                  <span class="pockettts-status-label"><!--$TXT_POCKETTTS_SERVER_STATUS--></span>
+                                  <span id="pockettts-status-dot" class="pockettts-status-dot" aria-label="offline">&#x1F534;</span>
+                                </div>
+                                <a href="#" id="pockettts-restart-button" class="pockettts-restart-button" data-icon="refresh" data-role="button" data-mini="true" style="width:130px; display:none;"><!--$TXT_POCKETTTS_SERVER_RESTART--></a>
+                                <span id="pockettts-status-note" class="pockettts-status-note"></span>
+                              </div>
                             </div>
 
                             <div class="t2sip-admin-box t2sip-admin-log">
@@ -213,7 +222,7 @@
                                       </div><br/>                                                                                                                                                                                                                                                                                                                                                                                 \
                                     </div></td></tr>' ).appendTo($('#formtable'));
                                             $('#main_form').trigger('create');
-                                            $('#P2W_lang'+new_vg_id).countrySelect({ onlyCountries: ['de', 'us', 'gb', 'es', 'fr', 'it'], preferredCountries: '' });
+                                            $('#P2W_lang'+new_vg_id).countrySelect({ onlyCountries: ['de', 'us', 'gb', 'es', 'fr', 'it', 'pt'], preferredCountries: '' });
                                             $('#P2W_lang'+new_vg_id).countrySelect('selectCountry', 'de');
                                             $('#P2W_lang'+new_vg_id).on('keypress keyup paste input', function(event) { event.preventDefault(); });
                                             $('#LAST_ID').val(Math.max.apply(Math, vg_ids));"><!--$TXT_CREATE_NEW_VG--></a>
@@ -244,6 +253,117 @@
                   <script type="text/javascript">
 					var DEBUG = false;  // true = verbose console output
 
+                    var pocketTtsRestartBusy = false;
+
+                    function pocketTtsStatusShouldShow() {
+                      var pluginOn = (($('#PLUGIN_USE').val() || 'off').toLowerCase() === 'on');
+                      return pluginOn;
+                    }
+
+                    function renderPocketTtsStatus(state, note) {
+                      var online = (state === 'online');
+                      var $box = $('#pockettts-server-status');
+                      var $dot = $('#pockettts-status-dot');
+                      var $btn = $('#pockettts-restart-button');
+                      var $note = $('#pockettts-status-note');
+
+                      if (!pocketTtsStatusShouldShow()) {
+                        $box.removeClass('is-visible');
+                        return;
+                      }
+
+                      $box.addClass('is-visible');
+                      $dot.html(online ? '&#x1F7E2;' : '&#x1F534;')
+                          .attr('aria-label', online ? 'online' : 'offline');
+
+                      if (online) {
+                        pocketTtsRestartBusy = false;
+                        $btn.hide().removeClass('ui-disabled').attr('aria-disabled', 'false');
+                        $note.text(note || '');
+                      } else {
+                        $btn.show();
+                        if (!pocketTtsRestartBusy) {
+                          $btn.removeClass('ui-disabled').attr('aria-disabled', 'false');
+                        }
+                        $note.text(note || '');
+                      }
+                    }
+
+                    function refreshPocketTtsStatus() {
+                      if (!pocketTtsStatusShouldShow()) {
+                        $('#pockettts-server-status').removeClass('is-visible');
+                        return;
+                      }
+
+                      $('#pockettts-server-status').addClass('is-visible');
+                      if (!pocketTtsRestartBusy) {
+                        $('#pockettts-status-note').text('<!--$TXT_POCKETTTS_SERVER_CHECKING-->');
+                      }
+
+                      $.ajax({
+                        url: 'index.cgi',
+                        method: 'GET',
+                        dataType: 'json',
+                        cache: false,
+                        timeout: 5000,
+                        data: { do: 'pockettts_watchdog_status', _: Date.now() }
+                      }).done(function(resp) {
+                        if (!pocketTtsStatusShouldShow()) return;
+                        if (!resp || !resp.visible) {
+                          $('#pockettts-server-status').removeClass('is-visible');
+                          return;
+                        }
+                        if (!pocketTtsRestartBusy) {
+                          renderPocketTtsStatus(resp.state === 'online' ? 'online' : 'offline', '');
+                        }
+                      }).fail(function() {
+                        if (!pocketTtsRestartBusy) {
+                          renderPocketTtsStatus('offline', '');
+                        }
+                      });
+                    }
+
+                    function updatePocketTtsStatusVisibility() {
+                      if (pocketTtsStatusShouldShow()) {
+                        $('#pockettts-server-status').addClass('is-visible');
+                        refreshPocketTtsStatus();
+                      } else {
+                        $('#pockettts-server-status').removeClass('is-visible');
+                      }
+                    }
+
+                    $(document).on('click', '#pockettts-restart-button', function(e) {
+                      e.preventDefault();
+                      if (pocketTtsRestartBusy || !pocketTtsStatusShouldShow()) return false;
+
+                      pocketTtsRestartBusy = true;
+                      renderPocketTtsStatus('offline', '<!--$TXT_POCKETTTS_SERVER_RESTARTING-->');
+                      $('#pockettts-restart-button')
+                        .show()
+                        .addClass('ui-disabled')
+                        .attr('aria-disabled', 'true');
+
+                      $.ajax({
+                        url: 'index.cgi',
+                        method: 'POST',
+                        dataType: 'json',
+                        cache: false,
+                        timeout: 65000,
+                        data: { do: 'pockettts_restart_server' }
+                      }).done(function(resp) {
+                        pocketTtsRestartBusy = false;
+                        if (resp && resp.ok && resp.state === 'online') {
+                          renderPocketTtsStatus('online', '');
+                        } else {
+                          renderPocketTtsStatus('offline', '<!--$TXT_POCKETTTS_SERVER_RESTART_FAILED-->');
+                        }
+                      }).fail(function() {
+                        pocketTtsRestartBusy = false;
+                        renderPocketTtsStatus('offline', '<!--$TXT_POCKETTTS_SERVER_RESTART_FAILED-->');
+                      });
+
+                      return false;
+                    });
 
 					function updateMqttUi() {
 					  var pluginOn = ($('#PLUGIN_USE').val() || 'off').toLowerCase() === 'on';
@@ -518,29 +638,106 @@
 						$('.ui-button:contains("<!--$TXT_BTN_SAVE-->")').click();
 					};
 
-                    /* Konfiguration importieren: Datei unveraendert an das CGI senden.
-                       Als Text gelesen wuerde eine aeltere ISO-8859-1-Datei verfaelscht. */
+                    /* Konfiguration importieren: native Browser-Alerts/Confirms vermeiden.
+                       Alle Rueckfragen und Ergebnisse werden als LoxBerry/jQuery-UI-Modal angezeigt.
+                       Die Datei wird unveraendert an das CGI gesendet; als Text gelesen wuerde eine
+                       aeltere ISO-8859-1-Datei verfaelscht. */
+                    function ConfigImportDialog(message, buttons, onClose)
+                    {
+                            var $dialog = $('#dialog');
+                            if (!$dialog.length) {
+                                    $('body').append('<div id="dialog"></div>');
+                                    $dialog = $('#dialog');
+                            }
+
+                            /* Text statt HTML einsetzen: CGI-Fehlertexte duerfen kein Markup einschleusen. */
+                            $dialog.empty().append($('<div/>').css({
+                                    'padding': '8px 4px',
+                                    'white-space': 'pre-line'
+                            }).text(message || ''));
+
+                            $dialog.dialog({
+                                    modal: true,
+                                    title: '<!--$MY_NAME--> - <!--$TXT_CONFIG_IMPORT_TITLE-->',
+                                    zIndex: 10000,
+                                    autoOpen: true,
+                                    resizable: false,
+                                    dialogClass: 'fixedDialog',
+                                    width: 'auto',
+                                    height: 'auto',
+                                    minWidth: 430,
+                                    minHeight: 180,
+                                    buttons: buttons || {},
+                                    close: function () {
+                                            $(this).dialog('destroy').empty();
+                                            if (typeof onClose === 'function') { onClose(); }
+                                    }
+                            });
+                    }
+
                     function ConfigImport(input)
                     {
                             if (!input.files || !input.files[0]) { return; }
-                            if (!confirm('<!--$TXT_CONFIG_IMPORT_CONFIRM-->')) { input.value = ''; return; }
+
+                            var file = input.files[0];
+                            var importStarted = false;
+                            var confirmButtons = {};
+                            confirmButtons['<!--$TXT_BTN_OK-->'] = function () {
+                                    importStarted = true;
+                                    $('#dialog').dialog('close');
+                                    ConfigImportUpload(file, input);
+                            };
+                            confirmButtons['<!--$TXT_CONFIG_IMPORT_CANCEL-->'] = function () {
+                                    $('#dialog').dialog('close');
+                            };
+
+                            ConfigImportDialog(
+                                    '<!--$TXT_CONFIG_IMPORT_CONFIRM-->',
+                                    confirmButtons,
+                                    function () { if (!importStarted) { input.value = ''; } }
+                            );
+                    }
+
+                    function ConfigImportUpload(file, input)
+                    {
                             var fd = new FormData();
                             fd.append('do', 'config_import');
-                            fd.append('cfgfile', input.files[0]);
-                            $.ajax(
-                            {
-                                    url: "index.cgi", type: "POST", data: fd,
-                                    processData: false, contentType: false,
-                                    dataType: "json", timeout: 30000,
-                                    success: function (d)
-                                    {
-                                            alert(d && d.ok ? '<!--$TXT_CONFIG_IMPORT_OK-->'
-                                                            : '<!--$TXT_CONFIG_IMPORT_FAILED-->\n\n' + (d ? d.msg : ''));
-                                            if (d && d.ok) { location.reload(); }
+                            fd.append('cfgfile', file);
+
+                            $.ajax({
+                                    url: 'index.cgi',
+                                    type: 'POST',
+                                    data: fd,
+                                    processData: false,
+                                    contentType: false,
+                                    dataType: 'json',
+                                    timeout: 30000,
+                                    success: function (d) {
+                                            var ok = d && Number(d.ok) === 1;
+                                            var message = ok
+                                                    ? '<!--$TXT_CONFIG_IMPORT_OK-->'
+                                                    : '<!--$TXT_CONFIG_IMPORT_FAILED-->' + (d && d.msg ? '\n\n' + d.msg : '');
+                                            var resultButtons = {};
+                                            resultButtons['<!--$TXT_BTN_OK-->'] = function () {
+                                                    $('#dialog').dialog('close');
+                                            };
+                                            ConfigImportDialog(
+                                                    message,
+                                                    resultButtons,
+                                                    function () { if (ok) { location.reload(); } }
+                                            );
                                     },
-                                    error: function () { alert('<!--$TXT_CONFIG_IMPORT_FAILED-->'); }
+                                    error: function () {
+                                            var errorButtons = {};
+                                            errorButtons['<!--$TXT_BTN_OK-->'] = function () {
+                                                    $('#dialog').dialog('close');
+                                            };
+                                            ConfigImportDialog('<!--$TXT_CONFIG_IMPORT_FAILED-->', errorButtons);
+                                    },
+                                    complete: function () {
+                                            input.value = '';
+                                    }
                             });
-                            input.value = '';
                     }
 
                     function play(vg_id_to_play)
@@ -583,6 +780,7 @@
 					  if (t2sInstalled === '0') t2sInstalled = 'false';
 
 					  updateMqttUi();
+                      updatePocketTtsStatusVisibility();
 
 					  if (DEBUG) {
 						console.log("PLUGIN_USE    =", pluginUse);
@@ -697,7 +895,66 @@
 
 					  // warte, bis alle Selects im DOM und enhanced sind
 					  setTimeout(fieldControl, 200);
+
+                      if (!window.__pocketTtsStatusTimer) {
+                        window.__pocketTtsStatusTimer = window.setInterval(function() {
+                          if (pocketTtsStatusShouldShow() && !pocketTtsRestartBusy) {
+                            refreshPocketTtsStatus();
+                          }
+                        }, 30000);
+                      }
 					});
 
-					$(document).on('change', '#PLUGIN_USE, #T2S_USE, #MQTT_MODE', fieldControl);
-					  </script>
+                    $(document).on('change', '#PLUGIN_USE, #T2S_USE, #MQTT_MODE', fieldControl);
+
+                    /* Pocket-TTS: German is preinstalled in postroot. Other language
+                     * models are checked/downloaded on demand while the local/offline
+                     * provider is active. French uses the larger french_24l model because
+                     * Pocket-TTS 2.1.0 has no compact French variant. */
+                    function showPocketTtsLanguageInstallFailure($status) {
+                      var message = '<!--$TXT_POCKETTTS_INSTALL_FAILED-->';
+                      $status.removeClass('test2sip_job_ok').addClass('test2sip_job_failed')
+                             .html(message).fadeTo('fast', 1);
+                      InfoDialog('Pocket-TTS', message);
+                    }
+
+                    var pocketTtsInstallBusy = {};
+                    $(document).on('change', "input[id^='P2W_lang'][id$='_code']", function() {
+                      if ((($('#PLUGIN_USE').val() || 'off').toLowerCase()) !== 'on') return;
+                      if ((($('#T2S_USE').val() || 'off').toLowerCase()) === 'on') return;
+
+                      var lang = (($(this).val() || 'de') + '').toLowerCase();
+                      if (!/^(de|gb|us|es|fr|it|pt)$/.test(lang)) return;
+                      if (pocketTtsInstallBusy[lang]) return;
+
+                      var m = (this.id || '').match(/^P2W_lang(\d+)_code$/);
+                      var vg = m ? m[1] : '';
+                      var $status = vg ? $('#call_result' + vg) : $('#form-error-message');
+                      pocketTtsInstallBusy[lang] = true;
+
+                      $status.removeClass('test2sip_job_failed').addClass('test2sip_job_ok')
+                             .html('<!--$TXT_POCKETTTS_INSTALLING-->').fadeTo('fast', 1);
+
+                      $.ajax({
+                        url: 'index.cgi',
+                        method: 'POST',
+                        dataType: 'json',
+                        cache: false,
+                        timeout: 600000,
+                        data: { do: 'pockettts_install_language', lang: lang }
+                      }).done(function(resp) {
+                        if (resp && resp.ok) {
+                          $status.removeClass('test2sip_job_failed').addClass('test2sip_job_ok')
+                                 .html('<!--$TXT_POCKETTTS_READY-->');
+                          refreshPocketTtsStatus();
+                        } else {
+                          showPocketTtsLanguageInstallFailure($status);
+                        }
+                      }).fail(function() {
+                        showPocketTtsLanguageInstallFailure($status);
+                      }).always(function() {
+                        pocketTtsInstallBusy[lang] = false;
+                        setTimeout(function() { $status.fadeTo('slow', 0); }, 5000);
+                      });
+                    });
+                      </script>

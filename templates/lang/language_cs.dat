@@ -84,6 +84,8 @@ TXT_SIPCMD_MSINFO="URL pro načtení hodnoty z Miniserveru:"
 TXT_BTN_BLOCK_CONFIG="Configuration"
 TXT_BTN_CONFIG_EXPORT="Export"
 TXT_BTN_CONFIG_IMPORT="Import"
+TXT_CONFIG_IMPORT_TITLE="Import konfigurace"
+TXT_CONFIG_IMPORT_CANCEL="Zrušit"
 TXT_CONFIG_IMPORT_CONFIRM="Importing overwrites all current settings. Continue?"
 TXT_CONFIG_IMPORT_OK="The configuration has been imported."
 TXT_CONFIG_IMPORT_FAILED="The configuration could not be imported."
@@ -103,3 +105,16 @@ TXT_MQTT_LOCAL_HINT="Interní MQTT broker tohoto LoxBerry se použije automatick
 TXT_MQTT_PASSWORD_SHOW="Zobrazit heslo"
 TXT_MQTT_PASSWORD_HIDE="Skrýt heslo"
 TXT_MQTT_CONNECTION_INVALID="MQTT pripojeni se nezdarilo. Zkontrolujte Host/IP, port, uzivatelske jmeno a heslo."
+
+; Pocket-TTS offline provider
+TXT_POCKETTTS_INSTALLING="Pocket-TTS: instaluje se jazykový model …"
+TXT_POCKETTTS_READY="Pocket-TTS: jazykový model je připraven."
+TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS: jazykový model se nepodařilo nainstalovat. Zkontrolujte volné místo na disku a připojení k internetu."
+
+; Pocket-TTS resident server watchdog
+TXT_POCKETTTS_SERVER_STATUS="Pocket-TTS server online:"
+TXT_POCKETTTS_SERVER_RESTART="Restartovat server"
+TXT_POCKETTTS_SERVER_RESTARTING="Server se restartuje …"
+TXT_POCKETTTS_SERVER_RESTART_FAILED="Restart se nezdařil"
+TXT_POCKETTTS_SERVER_CHECKING="Kontrola stavu …"
+TXT_EMPTY_LOG_DIALOG_AUTHENTICATE="Ověření se nezdařilo."

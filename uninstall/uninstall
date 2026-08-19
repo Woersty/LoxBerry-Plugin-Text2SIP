@@ -2,12 +2,190 @@
 use strict;
 use warnings;
 use File::Path qw(remove_tree);
+use File::Glob qw(bsd_glob);
 
-# Text2SIP uninstall helper.
-# Current releases do not install or operate a Mosquitto bridge. The cleanup
-# below only removes Text2SIP-owned runtime state and legacy bridge artifacts
-# that may exist after upgrading from an older plugin version.
+my $lbhome = 'REPLACELBHOMEDIR';
 
+sub remove_dir {
+    my ($dir, $label) = @_;
+    return unless defined $dir && -d $dir;
+    remove_tree($dir, { error => \my $err });
+    if (@$err) {
+        warn "Could not completely remove $label: $dir\n";
+    } else {
+        print "Removed $label: $dir\n";
+    }
+}
+
+sub cleanup_legacy_default_tsp_jobs {
+    # Stage 9 and older used loxberry's default task-spooler queue. Remove only
+    # entries whose command line clearly points at a Text2SIP RAM job; never
+    # clear or kill the shared queue itself.
+    return unless $> == 0 && -x '/usr/sbin/runuser';
+    my $tsp = '/usr/bin/tsp';
+    $tsp = '/usr/bin/ts' if !-x $tsp && -x '/usr/bin/ts';
+    return unless -x $tsp;
+
+    my @list;
+    if (open my $lh, '-|', '/usr/sbin/runuser', '-u', 'loxberry', '--',
+            '/usr/bin/env', '-u', 'TS_SOCKET', 'TMPDIR=/tmp', $tsp, '-l') {
+        @list = <$lh>;
+        close $lh;
+    }
+
+    for my $line (@list) {
+        next unless $line =~ /^\s*(\d+)\s+(\S+)/;
+        my ($id, $state) = ($1, $2);
+        next unless $line =~ m{/run/shm/text2sip/Text2SIP_[^\s]*\.job\.tsp};
+
+        # Kill only an actually running legacy Text2SIP entry, then remove its
+        # queue record/output. Queued/finished entries never receive a signal.
+        if ($state =~ /running/i) {
+            system('/usr/sbin/runuser', '-u', 'loxberry', '--', '/usr/bin/env',
+                   '-u', 'TS_SOCKET', 'TMPDIR=/tmp', $tsp, '-k', $id);
+        }
+        system('/usr/sbin/runuser', '-u', 'loxberry', '--', '/usr/bin/env',
+               '-u', 'TS_SOCKET', 'TMPDIR=/tmp', $tsp, '-r', $id);
+        print "Removed legacy Text2SIP task-spooler job #$id\n";
+    }
+}
+
+sub stop_text2sip_tsp_queue {
+    my $socket = '/run/shm/text2sip/task-spooler.sock';
+    return unless -e $socket;
+    my $tsp = '/usr/bin/tsp';
+    $tsp = '/usr/bin/ts' if !-x $tsp && -x '/usr/bin/ts';
+    return unless -x $tsp;
+
+    # Text2SIP uses its own TS_SOCKET, so killing this queue cannot touch jobs
+    # from another plugin/application. Run as loxberry because the queue belongs
+    # to the CGI user.
+    if ($> == 0 && -x '/usr/sbin/runuser') {
+        system('/usr/sbin/runuser', '-u', 'loxberry', '--', '/usr/bin/env',
+               "TS_SOCKET=$socket", 'TMPDIR=/run/shm/text2sip', $tsp, '-K');
+    } else {
+        local $ENV{TS_SOCKET} = $socket;
+        local $ENV{TMPDIR} = '/run/shm/text2sip';
+        system($tsp, '-K');
+    }
+}
+
+# Stop the watchdog first so it cannot restart Pocket-TTS while uninstall removes
+# the runtime. Then stop the resident model process itself.
+my $pocket_watchdog_ctl = "$lbhome/bin/plugins/text2sip/pockettts/pockettts_watchdog.sh";
+if (-x $pocket_watchdog_ctl) {
+    system($pocket_watchdog_ctl, 'stop');
+}
+my $pocket_server_ctl = "$lbhome/bin/plugins/text2sip/pockettts/pockettts_server.sh";
+if (-x $pocket_server_ctl) {
+    system($pocket_server_ctl, 'stop');
+}
+
+# Fallback for interrupted/partial installations where the controllers are gone.
+# Kill a surviving watchdog only when its cmdline clearly belongs to Text2SIP.
+my $watchdog_pidfile = '/run/shm/text2sip-pockettts/watchdog.pid';
+if (-r $watchdog_pidfile) {
+    if (open my $wpf, '<', $watchdog_pidfile) {
+        my $pid = <$wpf> // '';
+        close $wpf;
+        chomp $pid;
+        if ($pid =~ /^\d+$/ && -d "/proc/$pid") {
+            my $cmdline = '';
+            if (open my $wcf, '<:raw', "/proc/$pid/cmdline") {
+                local $/;
+                $cmdline = <$wcf> // '';
+                close $wcf;
+                $cmdline =~ s/\0/ /g;
+            }
+            if ($cmdline =~ /pockettts_watchdog\.sh/i) {
+                kill 'TERM', $pid;
+                select undef, undef, undef, 0.3;
+                kill 'KILL', $pid if -d "/proc/$pid";
+            }
+        }
+    }
+}
+
+# Fallback for interrupted/partial installations where the controller is gone
+# but a PID file survived in tmpfs. Only kill the PID if its cmdline clearly
+# belongs to Pocket-TTS serve.
+my $pidfile = '/run/shm/text2sip-pockettts/server.pid';
+if (-r $pidfile) {
+    if (open my $pf, '<', $pidfile) {
+        my $pid = <$pf> // '';
+        close $pf;
+        chomp $pid;
+        if ($pid =~ /^\d+$/ && -d "/proc/$pid") {
+            my $cmdline = '';
+            if (open my $cf, '<:raw', "/proc/$pid/cmdline") {
+                local $/;
+                $cmdline = <$cf> // '';
+                close $cf;
+                $cmdline =~ s/\0/ /g;
+            }
+            if ($cmdline =~ /pocket-tts/i && $cmdline =~ /\bserve\b/) {
+                kill 'TERM', $pid;
+                select undef, undef, undef, 0.5;
+                kill 'KILL', $pid if -d "/proc/$pid";
+            }
+        }
+    }
+}
+
+# Clean old shared-queue entries first, then stop the Stage 10 dedicated queue.
+# Running PJSUA helpers are terminated below by exact Text2SIP path matching.
+cleanup_legacy_default_tsp_jobs();
+stop_text2sip_tsp_queue();
+
+# Stop a call still running during uninstall. The patterns contain Text2SIP's
+# own installed paths so unrelated pjsua/perl processes are not targeted.
+for my $pattern (
+    "$lbhome/webfrontend/htmlauth/plugins/text2sip/bin/pjsua_call.pl",
+    "$lbhome/data/plugins/text2sip/.*/pjsua-",
+    '/run/shm/text2sip/Text2SIP_.*\\.job\\.tsp',
+) {
+    system('/usr/bin/pkill', '-TERM', '-f', $pattern) if -x '/usr/bin/pkill';
+}
+
+# Generated runtime state not tracked by the installation archive.
+remove_dir('/run/shm/text2sip', 'Text2SIP RAM runtime');
+remove_dir('/run/shm/text2sip-pockettts', 'Pocket-TTS RAM runtime');
+remove_dir("$lbhome/data/plugins/text2sip/pockettts", 'Pocket-TTS venv/model cache');
+remove_dir("$lbhome/data/plugins/text2sip/wav", 'legacy Text2SIP WAV directory');
+remove_dir("$lbhome/tmp/plugins/text2sip", 'Text2SIP temporary directory');
+remove_dir("$lbhome/data/system/tmp/text2sip-pockettts-preserve", 'legacy Pocket-TTS upgrade stash');
+remove_dir('/var/lib/text2sip', 'legacy Text2SIP state');
+
+# Remove bundled legacy Pico package files from pre-Stage-11 installations if
+# they survived as untracked files. Do not uninstall the corresponding Debian
+# system packages: they may be shared with another plugin.
+for my $deb (bsd_glob("$lbhome/data/plugins/text2sip/*/libttspico*.deb")) {
+    next unless -f $deb;
+    if (unlink $deb) {
+        print "Removed legacy bundled Pico package: $deb\n";
+    } else {
+        warn "Could not remove legacy bundled Pico package $deb: $!\n";
+    }
+}
+
+# Persistent upgrade siblings are intentionally outside data/plugins/text2sip so
+# LoxBerry cannot delete them during an upgrade. A real uninstall must remove
+# all of them, including recovery leftovers from interrupted upgrades.
+for my $dir (bsd_glob("$lbhome/data/plugins/text2sip_upgrade_*")) {
+    remove_dir($dir, 'Text2SIP upgrade backup') if -d $dir;
+}
+
+# Interrupted POSTROOT runs may leave only their small capture files behind.
+# Current releases use /run/shm; /tmp is retained here only for older releases.
+for my $pattern ('/run/shm/text2sip-postroot.*', '/tmp/text2sip-postroot.*') {
+    for my $tmp (bsd_glob($pattern)) {
+        next unless -f $tmp;
+        unlink $tmp or warn "Could not remove $tmp: $!\n";
+    }
+}
+
+# Current releases do not install or operate a Mosquitto bridge. These are
+# leftovers from old Text2SIP bridge versions only.
 my @legacy_files = (
     '/etc/mosquitto/conf.d/30-bridge-t2s.conf',
     '/etc/mosquitto/role/sip-bridge',
@@ -36,9 +214,8 @@ if (-d $legacy_cert_dir) {
     }
 }
 
-# Restore Mosquitto files which old Text2SIP bridge versions disabled.
-# /etc/mosquitto/ca and mosq-ca.crt are deliberately left untouched because
-# the CA can be shared with Text2Speech or other Mosquitto clients.
+# Restore Mosquitto files which old bridge versions disabled. Shared CA files
+# are deliberately left untouched because other plugins may still use them.
 my @restore_pairs = (
     ['/etc/mosquitto/conf.d/mosq_mqttgateway.conf.disabled', '/etc/mosquitto/conf.d/mosq_mqttgateway.conf'],
     ['/etc/mosquitto/conf.d/mosq_passwd.disabled',          '/etc/mosquitto/conf.d/mosq_passwd'],
@@ -67,14 +244,17 @@ for my $pair (@restore_pairs) {
 }
 rmdir '/etc/mosquitto/conf.d/disabled' if -d '/etc/mosquitto/conf.d/disabled';
 
-my $state_dir = '/var/lib/text2sip';
-if (-d $state_dir) {
-    remove_tree($state_dir, { error => \my $err });
-    warn "Could not completely remove $state_dir\n" if @$err;
-}
-
 if ($mosquitto_changed) {
     system('/bin/systemctl', 'restart', 'mosquitto');
 }
+
+# Do not remove shared Debian packages such as task-spooler or ffmpeg here:
+# system packages are shared resources and may be used by other LoxBerry plugins.
+# Older Text2SIP releases may have installed Pico system packages; they are not
+# removed here because their ownership/use by other plugins cannot be determined safely.
+# LoxBerry itself removes the archive-managed Text2SIP files/directories.
+
+# Plugin logs are generated runtime artifacts and can safely go at the very end.
+remove_dir("$lbhome/log/plugins/text2sip", 'Text2SIP log directory');
 
 exit 0;

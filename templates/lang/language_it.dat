@@ -84,6 +84,8 @@ TXT_SIPCMD_MSINFO="URL per leggere il valore dal Miniserver:"
 TXT_BTN_BLOCK_CONFIG="Configuration"
 TXT_BTN_CONFIG_EXPORT="Export"
 TXT_BTN_CONFIG_IMPORT="Import"
+TXT_CONFIG_IMPORT_TITLE="Importa configurazione"
+TXT_CONFIG_IMPORT_CANCEL="Annulla"
 TXT_CONFIG_IMPORT_CONFIRM="Importing overwrites all current settings. Continue?"
 TXT_CONFIG_IMPORT_OK="The configuration has been imported."
 TXT_CONFIG_IMPORT_FAILED="The configuration could not be imported."
@@ -103,3 +105,16 @@ TXT_MQTT_LOCAL_HINT="Il broker MQTT interno di questo LoxBerry viene utilizzato 
 TXT_MQTT_PASSWORD_SHOW="Mostra password"
 TXT_MQTT_PASSWORD_HIDE="Nascondi password"
 TXT_MQTT_CONNECTION_INVALID="Connessione MQTT non riuscita. Controllare Host/IP, porta, nome utente e password."
+
+; Pocket-TTS offline provider
+TXT_POCKETTTS_INSTALLING="Pocket-TTS: installazione del modello linguistico …"
+TXT_POCKETTTS_READY="Pocket-TTS: il modello linguistico è pronto."
+TXT_POCKETTTS_INSTALL_FAILED="Pocket-TTS: impossibile installare il modello linguistico. Verificare lo spazio libero su disco e la connessione Internet."
+
+; Pocket-TTS resident server watchdog
+TXT_POCKETTTS_SERVER_STATUS="Server Pocket-TTS online:"
+TXT_POCKETTTS_SERVER_RESTART="Riavvia server"
+TXT_POCKETTTS_SERVER_RESTARTING="Riavvio del server …"
+TXT_POCKETTTS_SERVER_RESTART_FAILED="Riavvio non riuscito"
+TXT_POCKETTTS_SERVER_CHECKING="Controllo stato …"
+TXT_EMPTY_LOG_DIALOG_AUTHENTICATE="Autenticazione non riuscita."

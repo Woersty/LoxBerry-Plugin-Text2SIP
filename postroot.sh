@@ -2,11 +2,64 @@
 
 logfile="REPLACELBPLOGDIR/Text2SIP.log"
 
+# Write important progress messages both to the LoxBerry installation log
+# (stdout) and to the plugin logfile. Long-running Pocket-TTS commands use
+# run_progress() to show heartbeats without flooding the installation log.
+log_line() {
+    local level="$1"
+    shift
+    local message="<${level}> $*"
+    printf '%s\n' "$message"
+    printf '%s %s\n' "$(date '+%F %T')" "$message" >> "$logfile"
+}
+
+log_info()    { log_line INFO "$@"; }
+log_ok()      { log_line OK "$@"; }
+log_warning() { log_line WARNING "$@"; }
+log_error()   { log_line ERROR "$@"; }
+
+run_logged() {
+    "$@" 2>&1 | tee -a "$logfile"
+    return ${PIPESTATUS[0]}
+}
+
+# Run a potentially long command without flooding the LoxBerry installation
+# log. A heartbeat is printed every 15 seconds so the user sees progress.
+# Command output is only shown (last lines) when the command fails.
+run_progress() {
+    local description="$1"
+    shift
+    local tmp rc pid
+    tmp="$(mktemp /run/shm/text2sip-postroot.XXXXXX)"
+
+    log_info "$description"
+    "$@" >"$tmp" 2>&1 &
+    pid=$!
+
+    local elapsed=0
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ $((elapsed % 15)) -eq 0 ] && kill -0 "$pid" 2>/dev/null; then
+            log_info "$description ... still working"
+        fi
+    done
+
+    wait "$pid"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log_warning "$description failed (exit=$rc); last output follows"
+        tail -n 20 "$tmp" | tee -a "$logfile"
+    fi
+    rm -f "$tmp"
+    return "$rc"
+}
+
 wait_for_dpkg() {
     local log="$1"
     local tries="${2:-60}"   # 60 * 2s = 120s
 
-    echo "$(date '+%F %T') Waiting for dpkg/apt locks ..." >> "$log"
+    log_info "Waiting for dpkg/apt locks ..."
     while \
         fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
         fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
@@ -18,7 +71,7 @@ wait_for_dpkg() {
         sleep 2
         tries=$((tries - 1))
         if [ "$tries" -le 0 ]; then
-            echo "$(date '+%F %T') dpkg lock wait timed out; continuing" >> "$log"
+            log_warning "dpkg lock wait timed out; continuing"
             break
         fi
     done
@@ -32,10 +85,10 @@ touch "$logfile"
 chown loxberry:loxberry "$logfile" 2>/dev/null || true
 chmod 660 "$logfile" 2>/dev/null || true
 
-echo "$(date '+%F %T') <INFO> Text2SIP postroot started" >> "$logfile"
+log_info "Text2SIP POSTROOT started"
 
 # -----------------------------------------------------------------------------
-# Runtime dependencies / Pico fallback
+# Runtime dependencies
 # -----------------------------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
 ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
@@ -43,54 +96,171 @@ ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
 
 if [ -r /etc/os-release ]; then
     . /etc/os-release
-    echo "<INFO> Detected ${PRETTY_NAME:-Linux}; architecture=$ARCH" >> "$logfile"
+    log_info "Detected ${PRETTY_NAME:-Linux}; architecture=$ARCH"
 else
-    echo "<INFO> Detected architecture=$ARCH" >> "$logfile"
+    log_info "Detected architecture=$ARCH"
 fi
 
-wait_for_dpkg "$logfile" 60
-apt-get update -y >> "$logfile" 2>&1 || true
-wait_for_dpkg "$logfile" 60
-apt-get install -y --no-install-recommends \
-    ffmpeg locales sox wget libttspico-utils libttspico-data libttspico0 \
-    >> "$logfile" 2>&1 || true
+# Python, ffmpeg/ffprobe, wget and CA certificates are part of the LoxBerry
+# standard image. Text2SIP therefore does not declare them as plugin APT
+# dependencies. Use the distro default Python supplied by LoxBerry.
+PYTHON_BIN="/usr/bin/python3"
 
-# Some Debian releases/architectures do not provide Pico in the active repo.
-# If pico2wave is still missing, use the architecture-specific DEBs shipped
-# below data/<arch>/ (when present in the full release archive).
-if ! command -v pico2wave >/dev/null 2>&1; then
-    PICO_DEB_DIR="REPLACELBHOMEDIR/data/plugins/text2sip/$ARCH"
-    PICO_DATA_DEB="$(find "$PICO_DEB_DIR" -maxdepth 1 -type f -name 'libttspico-data_*_all.deb' -print -quit 2>/dev/null)"
-    PICO_LIB_DEB="$(find "$PICO_DEB_DIR" -maxdepth 1 -type f -name "libttspico0_*_${ARCH}.deb" -print -quit 2>/dev/null)"
-    PICO_UTIL_DEB="$(find "$PICO_DEB_DIR" -maxdepth 1 -type f -name "libttspico-utils_*_${ARCH}.deb" -print -quit 2>/dev/null)"
-
-    if [ -n "$PICO_DATA_DEB" ] && [ -n "$PICO_LIB_DEB" ] && [ -n "$PICO_UTIL_DEB" ]; then
-        echo "<INFO> Installing bundled Pico packages from $PICO_DEB_DIR" >> "$logfile"
-        wait_for_dpkg "$logfile" 60
-        dpkg -i "$PICO_DATA_DEB" "$PICO_LIB_DEB" "$PICO_UTIL_DEB" >> "$logfile" 2>&1 || true
-        wait_for_dpkg "$logfile" 60
-        apt-get -f install -y >> "$logfile" 2>&1 || true
+# task-spooler is the only additional runtime package Text2SIP needs. Do not
+# declare it through dpkg/apt12 or apt13, because LoxBerry would reinstall it
+# on every plugin upgrade. Install it only once when the tsp binary is missing.
+if command -v tsp >/dev/null 2>&1; then
+    log_ok "task-spooler available: $(command -v tsp)"
+else
+    log_info "task-spooler is missing; installing it once"
+    wait_for_dpkg "$logfile" 60
+    # Refresh package lists only on a real first-install/missing-package case.
+    run_logged apt-get update || log_warning "APT update failed; trying task-spooler install with existing package lists"
+    wait_for_dpkg "$logfile" 60
+    if run_logged apt-get install -y --no-install-recommends task-spooler && command -v tsp >/dev/null 2>&1; then
+        log_ok "task-spooler installed successfully: $(command -v tsp)"
     else
-        echo "<WARNING> No complete bundled Pico package set found in $PICO_DEB_DIR" >> "$logfile"
+        log_error "task-spooler installation failed; Text2SIP cannot queue calls"
+        exit 1
     fi
 fi
 
-if command -v pico2wave >/dev/null 2>&1; then
-    echo "<OK> pico2wave available: $(command -v pico2wave)" >> "$logfile"
-else
-    echo "<WARNING> pico2wave is unavailable; Pico fallback cannot be used" >> "$logfile"
-fi
-
 if command -v ffmpeg >/dev/null 2>&1; then
-    echo "<OK> ffmpeg available: $(command -v ffmpeg)" >> "$logfile"
+    log_ok "ffmpeg available: $(command -v ffmpeg)"
 else
-    echo "<WARNING> ffmpeg is unavailable" >> "$logfile"
+    log_warning "ffmpeg is unavailable"
 fi
 
-if command -v sox >/dev/null 2>&1; then
-    echo "<OK> sox available: $(command -v sox)" >> "$logfile"
+if command -v ffprobe >/dev/null 2>&1; then
+    log_ok "ffprobe available: $(command -v ffprobe)"
 else
-    echo "<WARNING> sox is unavailable; pjsua duration detection will use its fallback" >> "$logfile"
+    log_warning "ffprobe is unavailable; pjsua duration detection will use its fallback"
+fi
+
+# -----------------------------------------------------------------------------
+# Pocket-TTS offline provider
+# -----------------------------------------------------------------------------
+# Plugin code stays in bin/. The generated Python runtime, model cache and
+# installed-language markers live in data/ and are preserved across upgrades by
+# preupgrade.sh/postupgrade.sh. This prevents repeated model downloads and huge
+# recursive delete logs.
+POCKET_CODE="REPLACELBHOMEDIR/bin/plugins/text2sip/pockettts"
+POCKET_DATA="REPLACELBHOMEDIR/data/plugins/text2sip/pockettts"
+POCKET_VENV="$POCKET_DATA/venv"
+POCKET_CLI="$POCKET_VENV/bin/pocket-tts"
+POCKET_HELPER="$POCKET_CODE/pockettts_language.sh"
+POCKET_SERVER_CTL="$POCKET_CODE/pockettts_server.sh"
+POCKET_WATCHDOG_CTL="$POCKET_CODE/pockettts_watchdog.sh"
+POCKET_CACHE="$POCKET_DATA/cache"
+POCKET_STATE="$POCKET_DATA/languages"
+
+log_info "Preparing Pocket-TTS offline provider ..."
+mkdir -p "$POCKET_CACHE" "$POCKET_STATE" /run/shm/text2sip-pockettts 2>/dev/null || true
+chown -R loxberry:loxberry "$POCKET_DATA" /run/shm/text2sip-pockettts 2>/dev/null || true
+chmod 775 "$POCKET_DATA" "$POCKET_CACHE" "$POCKET_STATE" /run/shm/text2sip-pockettts 2>/dev/null || true
+
+for POCKET_SCRIPT in "$POCKET_HELPER" "$POCKET_SERVER_CTL" "$POCKET_WATCHDOG_CTL"; do
+    if [ -f "$POCKET_SCRIPT" ]; then
+        chown root:loxberry "$POCKET_SCRIPT" 2>/dev/null || true
+        chmod 755 "$POCKET_SCRIPT" 2>/dev/null || true
+    fi
+done
+
+if [ -x "$PYTHON_BIN" ]; then
+    SYS_PY_VER="$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)"
+    log_info "Pocket-TTS Python: $($PYTHON_BIN --version 2>&1)"
+
+    # A preserved venv can only be reused with the same Python major/minor.
+    # This automatically rebuilds the runtime after e.g. Bookworm -> Trixie.
+    VENV_PY_VER=""
+    if [ -x "$POCKET_VENV/bin/python" ]; then
+        VENV_PY_VER="$($POCKET_VENV/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)"
+    fi
+    if [ -n "$VENV_PY_VER" ] && [ "$VENV_PY_VER" != "$SYS_PY_VER" ]; then
+        log_info "Python changed from $VENV_PY_VER to $SYS_PY_VER; rebuilding Pocket-TTS runtime"
+        rm -rf "$POCKET_VENV" >/dev/null 2>&1 || true
+    fi
+
+    if [ ! -x "$POCKET_VENV/bin/python" ]; then
+        if run_progress "Creating Pocket-TTS virtual environment" "$PYTHON_BIN" -m venv "$POCKET_VENV"; then
+            log_ok "Pocket-TTS virtual environment created"
+        else
+            log_warning "Could not create Pocket-TTS virtual environment"
+        fi
+    else
+        log_ok "Existing Pocket-TTS virtual environment reused"
+    fi
+
+    if [ -x "$POCKET_VENV/bin/python" ]; then
+        POCKET_INSTALLED="$($POCKET_VENV/bin/python -c 'import importlib.metadata; print(importlib.metadata.version("pocket-tts"))' 2>/dev/null || true)"
+        TORCH_OK=0
+        "$POCKET_VENV/bin/python" -c 'import torch' >/dev/null 2>&1 && TORCH_OK=1
+
+        if [ "$POCKET_INSTALLED" = "2.1.0" ] && [ "$TORCH_OK" -eq 1 ]; then
+            log_ok "Pocket-TTS 2.1.0 runtime already installed - no package download required"
+        else
+            if run_progress "Updating Python packaging tools" \
+                "$POCKET_VENV/bin/python" -m pip install --upgrade --disable-pip-version-check pip setuptools wheel; then
+                log_ok "Python packaging tools are ready"
+            else
+                log_warning "Python packaging tools could not be updated; continuing"
+            fi
+
+            # Install the CPU build first so x86 installations do not pull CUDA
+            # runtime packages from the default PyPI index. If this step fails,
+            # do NOT continue with Pocket-TTS: its normal dependency resolution
+            # could otherwise pull a regular/GPU PyTorch build and NVIDIA/CUDA
+            # packages from PyPI.
+            CPU_TORCH_READY=0
+            if run_progress "Installing CPU PyTorch for Pocket-TTS" \
+                "$POCKET_VENV/bin/python" -m pip install --disable-pip-version-check \
+                --index-url https://download.pytorch.org/whl/cpu 'torch>=2.5.0'; then
+                if "$POCKET_VENV/bin/python" -c 'import torch' >/dev/null 2>&1; then
+                    CPU_TORCH_READY=1
+                    log_ok "CPU PyTorch is ready"
+                else
+                    log_error "CPU PyTorch was installed but cannot be imported; Pocket-TTS package installation skipped"
+                fi
+            else
+                log_error "CPU PyTorch installation failed; Pocket-TTS package installation skipped"
+            fi
+
+            if [ "$CPU_TORCH_READY" -eq 1 ]; then
+                if run_progress "Installing Pocket-TTS 2.1.0 and dependencies" \
+                    "$POCKET_VENV/bin/python" -m pip install --disable-pip-version-check 'pocket-tts==2.1.0'; then
+                    log_ok "Pocket-TTS 2.1.0 is installed"
+                else
+                    log_warning "Pocket-TTS package installation failed"
+                fi
+            fi
+        fi
+    fi
+else
+    log_error "Pocket-TTS Python interpreter not available: $PYTHON_BIN"
+fi
+
+# German is mandatory. The model cache and marker are persistent, so after the
+# first successful installation this becomes a fast status check. Other
+# languages are still downloaded only when selected in the plugin UI.
+if [ -x "$POCKET_CLI" ] && [ -x "$POCKET_HELPER" ]; then
+    chown -R loxberry:loxberry "$POCKET_DATA" 2>/dev/null || true
+    if [ -f "$POCKET_STATE/de.ready" ]; then
+        log_ok "German Pocket-TTS model already available - no download required"
+    else
+        if run_progress "Downloading/preparing German Pocket-TTS model (juergen)" \
+            runuser -u loxberry -- env POCKETTTS_STDOUT=1 "$POCKET_HELPER" install de; then
+            log_ok "Pocket-TTS German model is ready"
+        else
+            log_error "Pocket-TTS German model could not be prepared; offline TTS is unavailable"
+        fi
+    fi
+else
+    log_error "Pocket-TTS installation incomplete; offline TTS is unavailable"
+fi
+
+# Keep generated data writable by the CGI user and movable by PREUPGRADE.
+if [ -d "$POCKET_DATA" ]; then
+    chown -R loxberry:loxberry "$POCKET_DATA" 2>/dev/null || true
 fi
 
 # -----------------------------------------------------------------------------
@@ -102,14 +272,15 @@ for PJSUA_ARCH in amd64 arm64 armhf; do
     if [ -f "$PJSUA_BIN" ]; then
         chown loxberry:loxberry "$PJSUA_BIN" >> "$logfile" 2>&1 || true
         chmod 755 "$PJSUA_BIN" >> "$logfile" 2>&1 || true
-        echo "<OK> PJSUA binary prepared: $PJSUA_BIN" >> "$logfile"
+        log_ok "PJSUA binary prepared: $PJSUA_BIN"
     else
-        echo "<WARNING> PJSUA binary not found: $PJSUA_BIN" >> "$logfile"
+        log_warning "PJSUA binary not found: $PJSUA_BIN"
     fi
 done
 
 # -----------------------------------------------------------------------------
 # One-time cleanup of legacy Text2SIP Mosquitto bridge artifacts.
+log_info "Checking legacy Text2SIP bridge artifacts ..."
 # The current plugin talks directly to either the internal or external broker.
 # -----------------------------------------------------------------------------
 legacy_mosquitto_changed=0
@@ -260,7 +431,7 @@ remove_legacy_hosts_entry() {
         return 0
     fi
 
-    tmp_file="$(mktemp /tmp/text2sip-hosts.XXXXXX)" || {
+    tmp_file="$(mktemp /run/shm/text2sip-hosts.XXXXXX)" || {
         echo "<WARNING> Could not create temporary file for /etc/hosts cleanup" >> "$logfile"
         return 0
     }
@@ -299,11 +470,56 @@ fi
 # -----------------------------------------------------------------------------
 daemon_script="REPLACELBHOMEDIR/system/daemons/plugins/Text2SIP"
 if [ -f "$daemon_script" ]; then
-    echo "<INFO> Running Text2SIP runtime setup" >> "$logfile"
-    /bin/bash "$daemon_script" >> "$logfile" 2>&1 || true
+    log_info "Running Text2SIP runtime setup ..."
+    run_logged /bin/bash "$daemon_script" || true
 else
-    echo "<WARNING> Text2SIP daemon script not found: $daemon_script" >> "$logfile"
+    log_warning "Text2SIP daemon script not found: $daemon_script"
 fi
 
-echo "$(date '+%F %T') <OK> Text2SIP postroot completed" >> "$logfile"
+# Keep installation deterministic: German is the mandatory base model and is
+# always made resident after install/upgrade. Runtime/UI language selections can
+# switch the single resident compact model later. This also avoids warming the
+# German voice against a different model that happened to be resident before an
+# upgrade.
+if [ -x "$POCKET_SERVER_CTL" ] && [ -f "$POCKET_STATE/de.ready" ]; then
+    runuser -u loxberry -- "$POCKET_SERVER_CTL" ensure german >/dev/null 2>&1 || true
+    log_info "Waiting for resident German Pocket-TTS server ..."
+    POCKET_SERVER_READY=0
+    POCKET_WAIT=0
+    while [ "$POCKET_WAIT" -lt 45 ]; do
+        if runuser -u loxberry -- "$POCKET_SERVER_CTL" health >/dev/null 2>&1; then
+            POCKET_SERVER_READY=1
+            break
+        fi
+        sleep 1
+        POCKET_WAIT=$((POCKET_WAIT + 1))
+        if [ $((POCKET_WAIT % 10)) -eq 0 ]; then
+            log_info "Pocket-TTS server is still loading ... (${POCKET_WAIT}s)"
+        fi
+    done
+
+    if [ "$POCKET_SERVER_READY" -eq 1 ]; then
+        log_ok "Resident German Pocket-TTS server is ready"
+        if run_progress "Warming resident Pocket-TTS voice 'juergen'" \
+            runuser -u loxberry -- /usr/bin/wget -q -T 120 -O /dev/null \
+            --header='Content-Type: application/x-www-form-urlencoded' \
+            --post-data='text=Test&voice_url=juergen' \
+            'http://127.0.0.1:8765/tts'; then
+            log_ok "Resident Pocket-TTS voice 'juergen' is warm"
+        else
+            log_warning "Pocket-TTS voice warm-up failed; normal server/CLI fallback remains available"
+        fi
+
+        # Refresh the RAM status once after installation/warm-up so the UI can
+        # show a current green state immediately instead of waiting for the next
+        # two-minute watchdog interval.
+        if [ -x "$POCKET_WATCHDOG_CTL" ]; then
+            runuser -u loxberry -- "$POCKET_WATCHDOG_CTL" check >/dev/null 2>&1 || true
+        fi
+    else
+        log_warning "Resident Pocket-TTS server did not become ready within 45 seconds; CLI fallback remains available"
+    fi
+fi
+
+log_ok "Text2SIP POSTROOT completed"
 exit 0
