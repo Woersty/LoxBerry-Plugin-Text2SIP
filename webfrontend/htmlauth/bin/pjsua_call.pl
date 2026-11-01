@@ -4,6 +4,8 @@ use warnings;
 use IPC::Open3;
 use IO::Select;
 use Symbol 'gensym';
+use POSIX ();
+use Errno qw(EINTR EAGAIN);
 use Getopt::Long;
 use Time::HiRes qw(time sleep);
 
@@ -40,20 +42,10 @@ sub logline {
 }
 
 # --- WAV-Laenge (fuer einmalige Wiedergabe; --play-file loopt sonst) ---
-# ffprobe is shipped with ffmpeg in the LoxBerry standard image.
-# Use list-form open so the WAV path is never interpreted by a shell.
 my $wav_dur = 0;
-if ($o{wav} ne '' && -r $o{wav} && -x '/usr/bin/ffprobe') {
-    if (open my $probe, '-|', '/usr/bin/ffprobe',
-            '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            $o{wav}) {
-        my $d = <$probe>;
-        close $probe;
-        chomp $d if defined $d;
-        $wav_dur = ($d && $d =~ /^[\d.]+$/) ? $d + 0 : 0;
-    }
+if ($o{wav} ne '' && -r $o{wav}) {
+    my $d = `sox --info -D "$o{wav}" 2>/dev/null`; chomp $d;
+    $wav_dur = ($d && $d =~ /^[\d.]+$/) ? $d + 0 : 0;
 }
 $wav_dur = 6 if $wav_dur <= 0;
 
@@ -134,16 +126,41 @@ sub hangup {
     send_cmd('h'); sleep 0.3; send_cmd('q');
     logline("Auflegen + Beenden");
 }
+# Process callbacks serially without blocking SIP event processing.
+my @result_queue;
+my $result_pid;
+sub pump_results {
+    if (defined $result_pid) {
+        my $status = waitpid($result_pid, 1);
+        return if $status == 0;
+        logline("Result callback failed (status=$?)") if $status > 0 && $? != 0;
+        undef $result_pid;
+    }
+    return unless @result_queue;
+    my $digit = $result_queue[0];
+    my $child = fork();
+    if (!defined $child) { logline("Cannot start result callback: $!"); return; }
+    if ($child == 0) {
+        close $wtr; close $rdr; close $err;
+        open STDIN, '<', '/dev/null';
+        exec('wget','-q','-t','1','-T','10','-O','/dev/null', $o{result_url}.$digit) or POSIX::_exit(127);
+    }
+    shift @result_queue;
+    $result_pid = $child;
+}
 sub fire_result {
     my $digit = shift;
     return if $o{result_url} eq '';
-    system('wget','-q','-t','1','-T','10','-O','/dev/null', $o{result_url}.$digit);
+    push @result_queue, $digit;
+    pump_results();
     # Basic-Auth-Zugangsdaten (user:pass@host) im Log maskieren
     (my $masked = $o{result_url}.$digit) =~ s{(https?://[^:/\@]+:)[^\@/]*(\@)}{${1}***${2}}i;
     logline("Result-URL: $masked");
 }
 
+my %read_buffer;
 while (!$done) {
+    pump_results();
     if (!$hangup_sent && time > $deadline) { logline("Deadline -> auflegen"); hangup(); }
 
     # Antwort-Timeout: keine Rufannahme (CONFIRMED) innerhalb der Waehlzeit -> aufgeben
@@ -169,9 +186,25 @@ while (!$done) {
     }
 
     foreach my $fh ($sel->can_read(0.2)) {
-        my $line = <$fh>;
-        if (!defined $line) { $sel->remove($fh); next; }
-        chomp $line;
+        my $key = fileno($fh);
+        my $chunk = '';
+        my $count = sysread($fh, $chunk, 16384);
+        if (!defined $count) {
+            next if $! == EINTR || $! == EAGAIN;
+            logline("Read error: $!");
+            $sel->remove($fh);
+            next;
+        }
+        $read_buffer{$key} //= '';
+        if ($count == 0) {
+            $sel->remove($fh);
+            $read_buffer{$key} .= "\n" if length $read_buffer{$key};
+        } else {
+            $read_buffer{$key} .= $chunk;
+        }
+        while ($read_buffer{$key} =~ s/\A([^\n]*)\n//) {
+        my $line = $1;
+        $line =~ s/\r$//;
         print $LOG "$line\n" if $LOG && $o{debug};
 
         if (!$registered && $line =~ /registration success, status=200/) {
@@ -207,15 +240,23 @@ while (!$done) {
         }
     }
 
+    } # all complete buffered lines processed
+
     if (waitpid($pid, 1) == $pid) { $done = 1; }  # WNOHANG (POSIX 1)
 }
 
 eval { close $wtr; };
-1 while waitpid(-1, 1) > 0;
+
 
 # Alt-Verhalten (sipcmd "Exiting."-Zweig): beim Beenden RESULT_VI + "0" feuern
 if ($o{result_url} ne '') {
     fire_result('0');
+}
+
+# Drain callbacks in order, including the legacy final reset to zero.
+while (defined $result_pid || @result_queue) {
+    pump_results();
+    sleep 0.05 if defined $result_pid || @result_queue;
 }
 
 logline(scalar(@dtmf_digits) . " DTMF-Ziffern empfangen: " . join('', @dtmf_digits));
