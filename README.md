@@ -11,6 +11,19 @@ Damit lassen sich Ereignisse aus **Loxone** oder anderen Systemen direkt als Tel
 
 ---
 
+## Neu in 2026.11.09
+
+* **x86_64 freigegeben.** Der LoxBerry-Installer akzeptiert jetzt auch x86_64-Systeme, etwa LoxBerry-VMs auf Proxmox.
+* **Lokaler SIP-Port einstellbar.** Ist Port 5060 bereits belegt, lässt sich im Plugin-Block ein anderer Port wie 5062 wählen.
+* **Loxone-Alarmtexte haben Vorrang.** Ein übergebener `tts`-Text ersetzt `##` vor der Miniserver-Abfrage. Die exakten Statuswerte `tts=0` und `tts=1` lösen über den HTTP-Einstieg keinen Anruf aus.
+* **DTMF reagiert schneller.** Vollständige Tastensignale werden sofort ausgewertet. HTTP-Rückmeldungen laufen im Hintergrund und behalten ihre Reihenfolge bis zur abschließenden `0`.
+* **Wiedergabe bei SIP-Portwechsel korrigiert.** Wechselt pjsua den Audioport während des Rufaufbaus, verbindet Text2SIP die Ansage mit dem aktuellen Port.
+* **Pocket-TTS-Start verbessert.** Der lokale Server verwendet Port 18765. Startbefehle werden nacheinander ausgeführt. Bei Startproblemen erscheinen zusätzliche Details im Installationslog.
+
+[Release 2026.11.09](https://github.com/Woersty/LoxBerry-Plugin-Text2SIP/releases/tag/2026.11.09)
+
+---
+
 ## Funktionen
 
 * 📞 Automatische Telefonanrufe über SIP
@@ -103,7 +116,7 @@ In der Plugin-Oberfläche wird der Pocket-TTS-Status immer angezeigt, sobald **T
 
 Benötigt werden:
 
-* ein laufender **LoxBerry**
+* ein laufender **LoxBerry ab Version 3.0.0**
 * ein erreichbarer **SIP-Server / SIP-Proxy**
 * ein dort eingerichteter SIP-Benutzer
 * Netzwerkzugriff vom LoxBerry zum SIP-System
@@ -156,6 +169,8 @@ Anschließend werden im Plugin unter anderem eingetragen:
 
 5. SIP-Zugangsdaten und mindestens eine Ansage konfigurieren.
 
+Für eine neue Pocket-TTS-Umgebung benötigt das Installationsskript mindestens **2 GiB freien Speicherplatz** auf dem LoxBerry-Datenträger. Beim ersten Einrichten lädt es CPU-PyTorch, Pocket-TTS und das deutsche Modell. Das kann auf einem Raspberry Pi einige Minuten dauern. Bei einem Update wird eine vorhandene kompatible Umgebung samt Modell wiederverwendet.
+
 ---
 
 ## Konfiguration einer Ansage
@@ -174,7 +189,7 @@ Typische Parameter sind:
 | Zielrufnummer     | Nummer, die angerufen werden soll          |
 | Pause vor Ansage  | Wartezeit nach Rufannahme                  |
 | Pause nach Ansage | Wartezeit nach Wiedergabe                  |
-| Timeout           | Maximale Anrufdauer                        |
+| Timeout           | Maximale Wartezeit bis zur Rufannahme      |
 | Result-URL        | URL für DTMF/MFV-Rückmeldungen             |
 | Bestätigungstaste | Taste zum Bestätigen bzw. Beenden          |
 | Miniserver-Wert   | Optionaler dynamischer Wert für die Ansage |
@@ -257,7 +272,7 @@ Ausgegeben wird:
 Achtung. Folgende Meldung wurde erkannt: Fenster im Wohnzimmer offen
 ```
 
-Enthält der konfigurierte Text keinen `##`-Platzhalter, kann der über `tts` übergebene Text zusätzlich an die Ansage angehängt werden.
+Ohne `##` hängt Text2SIP den übergebenen Text an die Ansage an. Die exakten Werte `tts=0` und `tts=1` gelten bei `index.php?mode=make_call` als Loxone-Statusmeldungen und starten keinen Anruf.
 
 ---
 
@@ -271,7 +286,7 @@ Der Platzhalter
 ##
 ```
 
-wird dabei durch den ausgelesenen Wert ersetzt.
+wird durch den ausgelesenen Wert ersetzt, wenn kein `tts`-Text übergeben wurde.
 
 Beispiel:
 
@@ -301,7 +316,7 @@ Beispiel:
 Alarm im Keller. Bitte bestätigen Sie mit Taste 2.
 ```
 
-Nach der Eingabe kann Text2SIP den Anruf beenden und optional eine konfigurierte URL aufrufen.
+Text2SIP legt bei der konfigurierten Bestätigungstaste auf. Ist eine Result-URL hinterlegt, hängt Text2SIP jede empfangene Taste an die URL an und ruft sie im Hintergrund auf. Nach den Tasteneingaben folgt die abschließende `0` als Rückmeldung zum Anrufende.
 
 Dadurch kann die Bestätigung wieder an **Loxone** oder ein anderes System übertragen werden.
 
@@ -334,6 +349,10 @@ Dadurch werden unter anderem Probleme vermieden, bei denen bei vorhandenen Docke
 
 Die passenden `pjsua`-Binaries werden vom Plugin abhängig von der verwendeten Architektur ausgewählt.
 
+### Lokaler SIP-Port
+
+Der lokale SIP-Port ist standardmäßig **5060**. Belegt ein anderer VoIP-Dienst diesen Port, wähle im Block **Plugin** unter **Lokaler SIP-Port** einen freien Port, zum Beispiel **5062**. Das Feld erscheint bei aktiviertem Plugin. Die Einstellung gilt für alle Ansagen und betrifft den lokalen SIP-Anschluss von Text2SIP.
+
 ---
 
 ## Logging
@@ -352,7 +371,7 @@ Das Log enthält unter anderem Informationen zu:
 
 Sensible Daten wie das SIP-Passwort werden im normalen Text2SIP-Log maskiert.
 
-Bei Problemen sollte zunächst das Plugin-Log geprüft werden.
+Bei Pocket-TTS-Startproblemen stehen die Servermeldungen in `/run/shm/text2sip-pockettts/server.log`. Scheitert die Startprüfung während der Installation, enthält das Installationslog auch die letzten Servermeldungen, sofern das Serverlog verfügbar ist.
 
 ---
 
@@ -385,7 +404,7 @@ Weitere Informationen befinden sich im LoxBerry Wiki:
 
 ---
 
-## Aktuelle Änderungen
+## Frühere Änderungen
 
 ### 2026.08.10
 
@@ -426,5 +445,3 @@ Weitere Informationen befinden sich in der Datei:
 * [Releases](https://github.com/Woersty/LoxBerry-Plugin-Text2SIP/releases)
 * [Issues](https://github.com/Woersty/LoxBerry-Plugin-Text2SIP/issues)
 * [LoxBerry Wiki – Text2SIP](https://www.loxwiki.eu/display/LOXBERRY/Text2SIP)
-
-Local SIP port: In the plugin settings, set **Local SIP Port** to an unused port (for example **5062**) if another VoIP plugin occupies 5060. The default is 5060. This setting applies to all calls, is saved in the plugin configuration and does not change the remote SIP server port.
